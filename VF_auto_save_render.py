@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on original work by tstscr(florianfelix)",
-	"version": (0, 5),
+	"version": (0, 6),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
@@ -63,7 +63,7 @@ def auto_save_render(scene):
 	rndr = scene.render
 
 	# Calculate elapsed render time
-	render_duration = round(time.time() - float(bpy.context.scene.auto_save_render_settings.start_date), 2)
+	render_time = round(time.time() - float(bpy.context.scene.auto_save_render_settings.start_date), 2)
 
 	# Save original file format settings
 	original_format = rndr.image_settings.file_format
@@ -85,7 +85,8 @@ def auto_save_render(scene):
 	extension = rndr.file_extension
 
 	# Set location and file name variables
-	blendname = os.path.splitext(os.path.basename(bpy.data.filepath))[0].replace(' ', '')
+	blendname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+	# blendname = os.path.splitext(os.path.basename(bpy.data.filepath))[0].replace(' ', '')
 
 	if len(bpy.context.scene.auto_save_render_settings.customdirectory) <= 1:
 		filepath = os.path.join(os.path.dirname(bpy.data.filepath), blendname)
@@ -97,15 +98,24 @@ def auto_save_render(scene):
 		os.mkdir(filepath)
 
 	# Build initial output file name components
-	save_name = blendname
+	save_name = ''
+	if bpy.context.scene.auto_save_render_settings.include_projectname:
+		save_name = blendname
+	if bpy.context.scene.auto_save_render_settings.include_activeitem and bpy.context.view_layer.objects.active:
+		if bpy.context.scene.auto_save_render_settings.include_projectname:
+			save_name += '-'
+		# save_name += '-Selected'
+		save_name += bpy.context.view_layer.objects.active.name
+		# save_name += '-' + bpy.context.view_layer.objects.active.name.replace(' ', '')
 	if bpy.context.scene.auto_save_render_settings.include_cameraname:
-		save_name += '-' + bpy.context.scene.camera.name.replace(' ', '')
+		save_name += '-' + bpy.context.scene.camera.name
+		# save_name += '-' + bpy.context.scene.camera.name.replace(' ', '')
 	if bpy.context.scene.auto_save_render_settings.include_framenumber:
 		save_name += '-' + format(bpy.context.scene.frame_current, '05')
 	if bpy.context.scene.auto_save_render_settings.include_renderengine:
 		save_name += '-' + bpy.context.engine.replace('BLENDER_', '')
 	if bpy.context.scene.auto_save_render_settings.include_rendertime:
-		save_name += '-' + str(render_duration)
+		save_name += '-' + str(render_time)
 
 	# Generate the serial number
 		# Finds all of the image files in the selected directory that start with blendname
@@ -126,10 +136,11 @@ def auto_save_render(scene):
 		return str(highest+1).zfill(4)
 
 	# Finish building the output file name
-	if bpy.context.scene.auto_save_render_settings.numbering_type == 'SERIAL':
-		save_name += '-' + save_number_from_files(files)
-	else:
-		save_name += '-' + datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')
+	if bpy.context.scene.auto_save_render_settings.include_numbering:
+		if bpy.context.scene.auto_save_render_settings.numbering_type == 'SERIAL':
+			save_name += '-' + save_number_from_files(files)
+		else:
+			save_name += '-' + datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')
 	save_name += extension
 	save_name = os.path.join(filepath, save_name)
 
@@ -182,6 +193,14 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		subtype="DIR_PATH",
 		set=set_directory,
 		get=get_directory)
+	include_projectname: bpy.props.BoolProperty(
+		name="Project Name",
+		description="Include the name of the name of the project in the auto saved file name (recommended)",
+		default=True)
+	include_activeitem: bpy.props.BoolProperty(
+		name="Active Item",
+		description="Include the name of the currently active item in the auto saved file name",
+		default=False)
 	include_cameraname: bpy.props.BoolProperty(
 		name="Camera Name",
 		description="Include the camera name in the auto saved file name",
@@ -198,6 +217,10 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		name="Render Time",
 		description="Include the number of seconds spent rendering in the auto saved file name",
 		default=False)
+	include_numbering: bpy.props.BoolProperty(
+		name="Enable Numbering",
+		description="Include serial number or time stamp in the auto saved file name (recommended)",
+		default=True)
 	numbering_type: bpy.props.EnumProperty(
 		name='File Numbering',
 		description='Serial or time stamp, ensuring every file is saved without overwriting',
@@ -210,6 +233,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	file_format: bpy.props.EnumProperty(
 		name='File Format',
 		description='Image format used for the automatically saved render files',
+		# icon='IMAGE', #'IMAGE_DATA' 'IMAGE_BACKGROUND' 'FILE_IMAGE'
 		items=[
 			('SCENE', 'Project Setting', 'Format set in output panel'),
 			('PNG', 'PNG', 'Save as png'),
@@ -248,10 +272,13 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.use_property_split = True
 		col = layout.column(align=True)
 		row = col.row(align=True)
+		row.prop(context.scene.auto_save_render_settings, 'include_projectname')
+		row.prop(context.scene.auto_save_render_settings, 'include_activeitem')
 		row.prop(context.scene.auto_save_render_settings, 'include_cameraname')
 		row.prop(context.scene.auto_save_render_settings, 'include_framenumber')
 		row.prop(context.scene.auto_save_render_settings, 'include_renderengine')
 		row.prop(context.scene.auto_save_render_settings, 'include_rendertime')
+		row.prop(context.scene.auto_save_render_settings, 'include_numbering')
 
 		layout.prop(context.scene.auto_save_render_settings, 'numbering_type')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format')

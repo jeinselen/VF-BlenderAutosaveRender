@@ -14,8 +14,10 @@ Automatically saves a numbered or dated image after every render. This Blender A
 - Custom Save Directory
   - Leave a single forward slash `/` to use an auto-generated folder with the same name as the current project
   - Select a specific directory to save all files to the same location
+- Active Item
+  - Includes the name of the current active item (not to be confused with selected; active is the primary object, light, or other element in a group selection, or the last selected item if nothing is currently selected)
 - Camera Name
-  - Includes the name of the currently active camera in the output file name
+  - Includes the name of the render camera
   - _Note: the file name always starts with the same name as the project, regardless of these checkboxes_
 - Frame Number
   - Includes the currently active frame padded to 5 digits
