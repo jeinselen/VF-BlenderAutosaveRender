@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on original work by tstscr(florianfelix)",
-	"version": (1, 0),
+	"version": (1, 2),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -16,6 +16,7 @@ bl_info = {
 # https://gist.github.com/robertguetzkow/8dacd4b565538d657b72efcaf0afe07e
 # https://blender.stackexchange.com/questions/6842/how-to-get-the-directory-of-open-blend-file-from-python
 # https://github.com/AlreadyLegendary/Render-time-estimator
+# https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
 
 import os
 import datetime
@@ -134,6 +135,8 @@ def auto_save_render(scene):
 		filename = projectname + '-' + serialnumber
 	elif bpy.context.scene.auto_save_render_settings.file_name_type == 'DATE':
 		filename = projectname + ' ' + datenumber + ' ' + timenumber
+	elif bpy.context.scene.auto_save_render_settings.file_name_type == 'RENDER':
+		filename = projectname + ' ' + renderengine + ' ' + rendertime
 	else:
 		filename = bpy.context.scene.auto_save_render_settings.file_name_custom
 		# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
@@ -162,6 +165,29 @@ def auto_save_render(scene):
 	print('Auto_Save:', filename)
 	image.save_render(filename, scene=None)
 
+	# Save log file
+	if bpy.context.scene.auto_save_render_settings.save_log:
+		# Log file settings
+		logpath = os.path.join(filepath, projectname + '-rendertime.txt')
+		logtitle = 'Total render time '
+		logtime = 0.00
+
+		# Get previous time spent rendering, if log file exists
+		if os.path.exists(logpath):
+			with open(logpath) as filein:
+				logtime = filein.read().replace(logtitle, '')
+				logtime = readableToSeconds(logtime)
+
+		# Add the newest segment of render time
+		logtime += float(render_time)
+
+		# Convert into formatted string
+		logtime = secondsToReadable(logtime)
+
+		# Write log file
+		with open(logpath, 'w') as fileout:
+			fileout.write(logtitle + logtime)
+
 	# Restore original user settings for render output (otherwise a temporary JPEG format above will overwrite the final PNG output colour mode and depth settings)
 	rndr.image_settings.file_format = original_format
 	rndr.image_settings.color_mode = original_colormode
@@ -174,6 +200,20 @@ def auto_save_render(scene):
 def render_start_time(scene):
 	# Saves start time in seconds as a string to the addon settings
 	bpy.context.scene.auto_save_render_settings.start_date = str(time.time())
+
+###########################################################################
+# Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
+# https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
+
+def secondsToReadable(seconds):
+	seconds, decimals = divmod(seconds, 1)
+	minutes, seconds = divmod(seconds, 60)
+	hours, minutes = divmod(minutes, 60)
+	return "%d:%02d:%02d.%02d" % (hours, minutes, seconds, round(decimals*100))
+
+def readableToSeconds(readable):
+	hours, minutes, seconds = readable.split(':')
+	return int(hours)*3600 + int(minutes)*60 + float(seconds)
 
 ###########################################################################
 # UI input functions
@@ -193,7 +233,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	enable_auto_save_render: bpy.props.BoolProperty(
 		name="Enable/disable automatic saving of rendered images",
 		description="Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
-		default=False)
+		default=True)
 	file_location: bpy.props.StringProperty(
 		name="Autosave Location",
 		description="Leave a single forward slash to auto generate folders alongside project files",
@@ -208,6 +248,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		items=[
 			('SERIAL', 'Project Name + Serial Number', 'Save files with a sequential serial number'),
 			('DATE', 'Project Name + Date & Time', 'Save files with the local date and time'),
+			('RENDER', 'Project Name + Render Engine + Render Time', 'Save files with the render engine and render time'),
 			('CUSTOM', 'Custom String', 'Save files with a custom string format'),
 			],
 		default='SERIAL')
@@ -226,6 +267,10 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 			('OPEN_EXR_MULTILAYER', 'OpenEXR MultiLayer', 'Save as multilayer exr'),
 			],
 		default='JPEG')
+	save_log: bpy.props.BoolProperty(
+		name="Save text file with total render time",
+		description="Saves a text file alongside the project with the total time spent rendering",
+		default=True)
 	start_date: bpy.props.StringProperty(
 		name="Render Start Date",
 		description="Stores the date as a string for when rendering began",
@@ -260,6 +305,7 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 			layout.use_property_split = True
 			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom', text='')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
+		layout.prop(context.scene.auto_save_render_settings, 'save_log')
 
 classes = (AutoSaveRenderSettings, RENDER_PT_auto_save_render)
 
