@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on original work by tstscr(florianfelix)",
-	"version": (1, 2),
+	"version": (1, 3),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -148,7 +148,10 @@ def auto_save_render(scene):
 		filename = filename.replace("{rendertime}", rendertime)
 		filename = filename.replace("{date}", datenumber)
 		filename = filename.replace("{time}", timenumber)
-		filename = filename.replace("{serial}", serialnumber)
+		if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
+			filename = filename.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.file_name_serial, '04'))
+			bpy.context.scene.auto_save_render_settings.file_name_serial += 1
+		# filename = filename.replace("{serial}", serialnumber)
 
 	# Add extension
 	filename += extension
@@ -255,8 +258,11 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
 		description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial} Note: a serial number must be placed at the very end",
-		default="AutoSave-{renderengine}-{rendertime}-{serial}",
+		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
+	file_name_serial: bpy.props.IntProperty(
+		name="Serial Number",
+		description="Current serial number, automatically increments with every render")
 	file_format: bpy.props.EnumProperty(
 		name='File Format',
 		description='Image format used for the automatically saved render files',
@@ -303,7 +309,10 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.prop(context.scene.auto_save_render_settings, 'file_name_type', icon='FILE_TEXT')
 		if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
 			layout.use_property_split = True
-			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom', text='')
+			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom')
+			if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
+				layout.use_property_split = True
+				layout.prop(context.scene.auto_save_render_settings, 'file_name_serial')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
 		layout.prop(context.scene.auto_save_render_settings, 'save_log')
 
