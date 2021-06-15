@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
-	"author": "John Einselen - Vectorform LLC, based on original work by tstscr(florianfelix)",
-	"version": (1, 3),
+	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
+	"version": (1, 4),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -23,7 +23,7 @@ import datetime
 import time
 import bpy
 from bpy.app.handlers import persistent
-from re import findall, search
+from re import findall, search, M as multiline
 from pathlib import Path
 
 IMAGE_FORMATS = (
@@ -61,29 +61,30 @@ IMAGE_EXTENSIONS = (
 def auto_save_render(scene):
 	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
 		return
-	rndr = scene.render
 
 	# Calculate elapsed render time
 	render_time = round(time.time() - float(bpy.context.scene.auto_save_render_settings.start_date), 2)
 
+	# Update total render time
+	bpy.context.scene.auto_save_render_settings.total_render_time = bpy.context.scene.auto_save_render_settings.total_render_time + render_time
+
 	# Save original file format settings
-	original_format = rndr.image_settings.file_format
-	original_colormode = rndr.image_settings.color_mode
-	original_colordepth = rndr.image_settings.color_depth
+	original_format = scene.render.image_settings.file_format
+	original_colormode = scene.render.image_settings.color_mode
+	original_colordepth = scene.render.image_settings.color_depth
 
 	# Set up render output formatting
 	if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE':
 		if original_format not in IMAGE_FORMATS:
-			print('{} Format is not an image format. Not Saving'.format(
-				original_format))
+			print('VF Auto Save Render: {} format is not an image format, not saving'.format(original_format))
 			return
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'JPEG':
-		rndr.image_settings.file_format = 'JPEG'
+		scene.render.image_settings.file_format = 'JPEG'
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'PNG':
-		rndr.image_settings.file_format = 'PNG'
+		scene.render.image_settings.file_format = 'PNG'
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'OPEN_EXR_MULTILAYER':
-		rndr.image_settings.file_format = 'OPEN_EXR_MULTILAYER'
-	extension = rndr.file_extension
+		scene.render.image_settings.file_format = 'OPEN_EXR_MULTILAYER'
+	extension = scene.render.file_extension
 
 	# Set location and file name variables
 	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
@@ -100,24 +101,22 @@ def auto_save_render(scene):
 	# Generate the serial number
 		# Finds all of the image files in the selected directory that start with projectname
 	files = [f for f in os.listdir(filepath)
-			if f.lower().endswith(IMAGE_EXTENSIONS)]
-			# and f.startswith(projectname)
+			if f.startswith(projectname)
+			and f.lower().endswith(IMAGE_EXTENSIONS)]
 
 		# Searches the file collection and returns the next highest number as a 4 digit string
 	def save_number_from_files(files):
 		highest = 0
 		if files:
 			for f in files:
-				# find last numbers in the filename
-				suffix = findall(r'\d+', f.split(projectname)[-1])
+				# find filenames that end with four or more digits
+				suffix = findall(r'\d{4,}$', os.path.splitext(f)[0].split(projectname)[-1], multiline)
 				if suffix:
 					if int(suffix[-1]) > highest:
 						highest = int(suffix[-1])
-		# return str(highest+1).zfill(4)
 		return format(highest+1, '04')
 
-	# Create the rest of the file name components
-	# projectname has already been created above
+	# Create the rest of the file name components (projectname has already been created above)
 	if bpy.context.view_layer.objects.active:
 		itemname = bpy.context.view_layer.objects.active.name
 	else:
@@ -151,50 +150,26 @@ def auto_save_render(scene):
 		if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
 			filename = filename.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.file_name_serial, '04'))
 			bpy.context.scene.auto_save_render_settings.file_name_serial += 1
-		# filename = filename.replace("{serial}", serialnumber)
 
 	# Add extension
 	filename += extension
 
-	# Combine file path and file name
+	# Combine file path and file name using system separator
 	filename = os.path.join(filepath, filename)
 
 	# Save image file
 	image = bpy.data.images['Render Result']
 	if not image:
-		print('Auto Save: Render Result not found. Image not saved')
+		print('VF Auto Save Render: Render Result not found. Image not saved')
 		return
 
-	print('Auto_Save:', filename)
+	print('VF Auto Save Render:' + filename)
 	image.save_render(filename, scene=None)
 
-	# Save log file
-	if bpy.context.scene.auto_save_render_settings.save_log:
-		# Log file settings
-		logpath = os.path.join(filepath, projectname + '-rendertime.txt')
-		logtitle = 'Total render time '
-		logtime = 0.00
-
-		# Get previous time spent rendering, if log file exists
-		if os.path.exists(logpath):
-			with open(logpath) as filein:
-				logtime = filein.read().replace(logtitle, '')
-				logtime = readableToSeconds(logtime)
-
-		# Add the newest segment of render time
-		logtime += float(render_time)
-
-		# Convert into formatted string
-		logtime = secondsToReadable(logtime)
-
-		# Write log file
-		with open(logpath, 'w') as fileout:
-			fileout.write(logtitle + logtime)
-
-	# Restore original user settings for render output (otherwise a temporary JPEG format above will overwrite the final PNG output colour mode and depth settings)
-	rndr.image_settings.file_format = original_format
-	rndr.image_settings.color_mode = original_colormode
-	rndr.image_settings.color_depth = original_colordepth
+	# Restore original user settings for render output
+	scene.render.image_settings.file_format = original_format
+	scene.render.image_settings.color_mode = original_colormode
+	scene.render.image_settings.color_depth = original_colordepth
 
 ###########################################################################
 # Start time function
@@ -206,14 +181,15 @@ def render_start_time(scene):
 
 ###########################################################################
 # Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
-# https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
 
+# Converts float into HH:MM:SS.## format, hours expand indefinitely (will not roll over into days)
 def secondsToReadable(seconds):
 	seconds, decimals = divmod(seconds, 1)
 	minutes, seconds = divmod(seconds, 60)
 	hours, minutes = divmod(minutes, 60)
 	return "%d:%02d:%02d.%02d" % (hours, minutes, seconds, round(decimals*100))
 
+# Converts string of HH:MM:SS.## format into float
 def readableToSeconds(readable):
 	hours, minutes, seconds = readable.split(':')
 	return int(hours)*3600 + int(minutes)*60 + float(seconds)
@@ -230,7 +206,32 @@ def get_directory(self):
 	return self.get("file_location", bpy.context.scene.auto_save_render_settings.bl_rna.properties["file_location"].default)
 
 ###########################################################################
-# UI settings and rendering classes
+# User preferences and UI rendering class
+
+class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
+	bl_idname = __name__
+
+	show_total_render_time: bpy.props.BoolProperty(
+		name="Show Total Render Time",
+		description='Displays the total amount of time spent rendering a project in the output panel',
+		default=False)
+	# default_file_name_custom: bpy.props.StringProperty(
+	# 	name="Custom String",
+	# 	description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}",
+	# 	default="{project}-{serial}-{renderengine}-{rendertime}",
+	# 	maxlen=4096)
+
+	def draw(self, context):
+		layout = self.layout
+		# layout.label(text="Addon Default Preferences")
+		grid = layout.grid_flow(row_major=True)
+		grid.prop(self, "show_total_render_time")
+		if bpy.context.preferences.addons['VF_auto_save_render'].preferences.show_total_render_time:
+			grid.prop(context.scene.auto_save_render_settings, 'total_render_time')
+		# layout.prop(self, 'default_file_name_custom')
+
+###########################################################################
+# Project settings and UI rendering classes
 
 class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	enable_auto_save_render: bpy.props.BoolProperty(
@@ -257,7 +258,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		default='SERIAL')
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
-		description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial} Note: a serial number must be placed at the very end",
+		description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}",
 		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
 	file_name_serial: bpy.props.IntProperty(
@@ -273,14 +274,14 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 			('OPEN_EXR_MULTILAYER', 'OpenEXR MultiLayer', 'Save as multilayer exr'),
 			],
 		default='JPEG')
-	save_log: bpy.props.BoolProperty(
-		name="Save text file with total render time",
-		description="Saves a text file alongside the project with the total time spent rendering",
-		default=True)
 	start_date: bpy.props.StringProperty(
 		name="Render Start Date",
-		description="Stores the date as a string for when rendering began",
+		description="Stores the date when rendering started in seconds as a string",
 		default="")
+	total_render_time: bpy.props.FloatProperty(
+		name="Total Render Time",
+		description="Stores the total time spent rendering in seconds",
+		default=0)
 
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -291,7 +292,6 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_options = {'DEFAULT_CLOSED'}
 
 	# Check for engine compatibility
-	# This is currently disabled for simplicity
 	# compatible_render_engines = {'BLENDER_RENDER', 'BLENDER_OPENGL', 'BLENDER_WORKBENCH', 'BLENDER_EEVEE', 'CYCLES', 'RPR', 'LUXCORE'}
 
 	# @classmethod
@@ -308,15 +308,20 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.use_property_split = True
 		layout.prop(context.scene.auto_save_render_settings, 'file_name_type', icon='FILE_TEXT')
 		if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
+			# this is intended as a semi-hacky way to override the initial custom string with a global preset instead of relying on get/set
+			# if '{unset}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
+				# bpy.context.scene.auto_save_render_settings.file_name_custom = bpy.context.preferences.addons['VF_auto_save_render'].preferences.default_file_name_custom
 			layout.use_property_split = True
 			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom')
 			if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
 				layout.use_property_split = True
 				layout.prop(context.scene.auto_save_render_settings, 'file_name_serial')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
-		layout.prop(context.scene.auto_save_render_settings, 'save_log')
+		if bpy.context.preferences.addons['VF_auto_save_render'].preferences.show_total_render_time:
+			box = layout.box()
+			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
-classes = (AutoSaveRenderSettings, RENDER_PT_auto_save_render)
+classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render)
 
 ###########################################################################
 # Addon registration functions
