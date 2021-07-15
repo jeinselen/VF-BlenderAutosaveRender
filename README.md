@@ -1,12 +1,13 @@
-# VF-BlenderAutoSaveRender
+# VF Auto Save Render
+
 Automatically saves a numbered or dated image after every render. This Blender Add-on is designed to make test renders easier to review, saving what would otherwise be lost when quitting the app. It's also good for creating a progression timelapse after a project is complete, or naming rendered files with the currently selected object or other custom settings.
 
 ![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot.jpg)
 
 ## Installation and usage
-- Download the .py file
-- Open Blender preferences and navigate to the "Add-ons" tab
-- Install and turn on the Add-on
+- Download [VF_autoSaveRender.py](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutoSaveRender/main/VF_autoSaveRender.py)
+- Open Blender Preferences and navigate to the "Add-ons" tab
+- Install and enable the Add-on
 - It will be enabled by default in the Render Output panel, where you can customise the automatic file output settings
 
 ## Add-on Preferences
@@ -34,7 +35,7 @@ Project settings are found at the bottom of the Render Output panel and are uniq
   - This uses the name of the blender file and the local date and time (formatted YYYY-MM-DD HH-MM-SS using 24 hour time)
 - `Project Name + Render Engine + Render Time`
   - This uses the name of the blender file, the name of the render engine, and the time it took to render
-  - If a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
+  - When a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
 - `Custom String`
   - This uses pattern replacement to allow for entirely unique file naming patterns
   - Supported variables:
@@ -61,9 +62,11 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 
 ### Total Time Spent Rendering
 
-- This simply displays the total number of hours, minutes, and seconds spent rendering the current project, and must be enabled in the Add-on Preferences (see above)
+- This tracks the total number of hours, minutes, and seconds spent rendering the current project, and the output panel display can be turned on in the Add-on Preferences (see above)
 
 ## Notes
 
-- Auto Save Render depends on the Blender file having been saved at least once, otherwise there is no project name or directory for the Add-on to work with
-- Auto Save Render will only save the final frame when rendering sequences, preventing mass dupliation, but still allowing for total render time to be saved
+- Auto Save Render depends on the Blender file having been saved at least once in order to save images, otherwise there is no project name or directory for the Add-on to work with
+- Only the final frame will be atuo saved when rendering sequences, preventing mass dupliation but still allowing for total render time to be saved in the file name (depending on settings)
+- Total render time will continue to increment even when auto file saving is toggled off in the output panel
+- Total render time will _not_ increment when rendering files from the command line, since it depends on being saved within the project file (and rendering from the command line typically doesn't save the project file after rendering finishes)

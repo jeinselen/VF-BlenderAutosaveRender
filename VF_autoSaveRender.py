@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 4),
+	"version": (1, 4, 1),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -59,14 +59,14 @@ IMAGE_EXTENSIONS = (
 
 @persistent
 def auto_save_render(scene):
-	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
-		return
-
 	# Calculate elapsed render time
 	render_time = round(time.time() - float(bpy.context.scene.auto_save_render_settings.start_date), 2)
 
 	# Update total render time
 	bpy.context.scene.auto_save_render_settings.total_render_time = bpy.context.scene.auto_save_render_settings.total_render_time + render_time
+
+	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
+		return {'CANCELLED'}
 
 	# Save original file format settings
 	original_format = scene.render.image_settings.file_format
@@ -171,6 +171,8 @@ def auto_save_render(scene):
 	scene.render.image_settings.color_mode = original_colormode
 	scene.render.image_settings.color_depth = original_colordepth
 
+	return {'FINISHED'}
+
 ###########################################################################
 # Start time function
 
@@ -226,7 +228,7 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		# layout.label(text="Addon Default Preferences")
 		grid = layout.grid_flow(row_major=True)
 		grid.prop(self, "show_total_render_time")
-		if bpy.context.preferences.addons['VF_auto_save_render'].preferences.show_total_render_time:
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			grid.prop(context.scene.auto_save_render_settings, 'total_render_time')
 		# layout.prop(self, 'default_file_name_custom')
 
@@ -310,14 +312,14 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
 			# this is intended as a semi-hacky way to override the initial custom string with a global preset instead of relying on get/set
 			# if '{unset}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
-				# bpy.context.scene.auto_save_render_settings.file_name_custom = bpy.context.preferences.addons['VF_auto_save_render'].preferences.default_file_name_custom
+				# bpy.context.scene.auto_save_render_settings.file_name_custom = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.default_file_name_custom
 			layout.use_property_split = True
 			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom')
 			if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
 				layout.use_property_split = True
 				layout.prop(context.scene.auto_save_render_settings, 'file_name_serial')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
-		if bpy.context.preferences.addons['VF_auto_save_render'].preferences.show_total_render_time:
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			box = layout.box()
 			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
