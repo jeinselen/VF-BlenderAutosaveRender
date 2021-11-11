@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 4, 1),
+	"version": (1, 5, 0),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -65,6 +65,11 @@ def auto_save_render(scene):
 	# Update total render time
 	bpy.context.scene.auto_save_render_settings.total_render_time = bpy.context.scene.auto_save_render_settings.total_render_time + render_time
 
+	# Restore unprocessed file path if processing is enabled
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.auto_save_render_settings.output_file_path:
+		scene.render.filepath = bpy.context.scene.auto_save_render_settings.output_file_path
+
+	# Stop here if the auto output is disabled
 	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
 		return {'CANCELLED'}
 
@@ -76,7 +81,7 @@ def auto_save_render(scene):
 	# Set up render output formatting
 	if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE':
 		if original_format not in IMAGE_FORMATS:
-			print('VF Auto Save Render: {} format is not an image format, not saving'.format(original_format))
+			print('VF Auto Save Render: {} is not an image format, not saving'.format(original_format))
 			return
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'JPEG':
 		scene.render.image_settings.file_format = 'JPEG'
@@ -117,10 +122,7 @@ def auto_save_render(scene):
 		return format(highest+1, '04')
 
 	# Create the rest of the file name components (projectname has already been created above)
-	if bpy.context.view_layer.objects.active:
-		itemname = bpy.context.view_layer.objects.active.name
-	else:
-		itemname = 'None'
+	itemname = bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None'
 	cameraname = bpy.context.scene.camera.name
 	framenumber = format(bpy.context.scene.frame_current, '04')
 	renderengine = bpy.context.engine.replace('BLENDER_', '')
@@ -163,7 +165,6 @@ def auto_save_render(scene):
 		print('VF Auto Save Render: Render Result not found. Image not saved')
 		return
 
-	print('VF Auto Save Render:' + filename)
 	image.save_render(filename, scene=None)
 
 	# Restore original user settings for render output
@@ -177,9 +178,28 @@ def auto_save_render(scene):
 # Start time function
 
 @persistent
-def render_start_time(scene):
-	# Saves start time in seconds as a string to the addon settings
+def auto_save_render_start(scene):
+	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.auto_save_render_settings.start_date = str(time.time())
+
+	# Filter output file path if enabled
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+		# Save original file path
+		bpy.context.scene.auto_save_render_settings.output_file_path = filepath = scene.render.filepath
+
+		# Process file path variables
+		filepath = filepath.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
+		filepath = filepath.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
+		filepath = filepath.replace("{camera}", bpy.context.scene.camera.name)
+		filepath = filepath.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
+		filepath = filepath.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
+		filepath = filepath.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+		if '{serial}' in filepath:
+			filepath = filepath.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.output_file_serial, '04'))
+			bpy.context.scene.auto_save_render_settings.output_file_serial += 1
+
+		# Replace scene filepath output with the processed version
+		scene.render.filepath = filepath
 
 ###########################################################################
 # Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
@@ -217,6 +237,10 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		name="Show Total Render Time",
 		description='Displays the total amount of time spent rendering a project in the output panel',
 		default=False)
+	filter_output_file_path: bpy.props.BoolProperty(
+		name="Process Output File Path",
+		description='Implements some of the same keywords used in the custom naming scheme in the Output directory',
+		default=False)
 	# default_file_name_custom: bpy.props.StringProperty(
 	# 	name="Custom String",
 	# 	description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}",
@@ -230,6 +254,10 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		grid.prop(self, "show_total_render_time")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			grid.prop(context.scene.auto_save_render_settings, 'total_render_time')
+		layout.prop(self, "filter_output_file_path")
+		# if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+			# box = layout.box()
+			# box.label(text="Output Path Variables: {project} {item} {camera} {renderengine} {date} {time} {serial}")
 		# layout.prop(self, 'default_file_name_custom')
 
 ###########################################################################
@@ -285,13 +313,44 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		description="Stores the total time spent rendering in seconds",
 		default=0)
 
+	# Variables for output file path processing
+	output_file_path: bpy.props.StringProperty(
+		name="Original Render Path",
+		description="Stores the original render path as a string to allow for successful restoration after rendering completes",
+		default="")
+	output_file_serial: bpy.props.IntProperty(
+		name="Serial Number",
+		description="Current serial number, automatically increments with every render")
+
+
+class RENDER_PT_auto_save_render_path(bpy.types.Panel):
+	bl_space_type = 'PROPERTIES'
+	bl_region_type = 'WINDOW'
+	bl_context = "render"
+	bl_label = "Output Path Variables"
+	bl_parent_id = "RENDER_PT_output"
+	bl_options = {'HIDE_HEADER'}
+
+	# def draw_header(self, context):
+		# self.layout.prop(bpy.context.scene.render, 'use_border', text='')
+
+	def draw(self, context):
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+			layout = self.layout
+			layout.use_property_decorate = False  # No animation
+			layout.use_property_split = True
+			if '{serial}' in bpy.context.scene.render.filepath:
+				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
+			box = layout.box()
+			box.label(text="Output Path Variables: {project} {item} {camera} {renderengine} {date} {time} {serial}")
+
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
 	bl_context = "render"
 	bl_label = "Auto Save Render"
 	bl_parent_id = "RENDER_PT_output"
-	bl_options = {'DEFAULT_CLOSED'}
+	# bl_options = {'DEFAULT_CLOSED'}
 
 	# Check for engine compatibility
 	# compatible_render_engines = {'BLENDER_RENDER', 'BLENDER_OPENGL', 'BLENDER_WORKBENCH', 'BLENDER_EEVEE', 'CYCLES', 'RPR', 'LUXCORE'}
@@ -321,9 +380,11 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			box = layout.box()
+			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
+				# box.label(text="Custom String Variables: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
-classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render)
+classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render)
 
 ###########################################################################
 # Addon registration functions
@@ -333,8 +394,8 @@ def register():
 		bpy.utils.register_class(cls)
 	bpy.types.Scene.auto_save_render_settings = bpy.props.PointerProperty(type=AutoSaveRenderSettings)
 	# Using init instead of pre means that the entire animation render time is tracked instead of just the final frame
-	# bpy.app.handlers.render_pre.append(render_start_time)
-	bpy.app.handlers.render_init.append(render_start_time)
+	# bpy.app.handlers.render_pre.append(auto_save_render_start)
+	bpy.app.handlers.render_init.append(auto_save_render_start)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
 	# bpy.app.handlers.render_post.append(auto_save_render)
 	bpy.app.handlers.render_cancel.append(auto_save_render)
@@ -345,8 +406,8 @@ def unregister():
 		bpy.utils.unregister_class(cls)
 	del bpy.types.Scene.auto_save_render_settings
 	# Using init instead of pre means that the entire animation render time is tracked instead of just the final frame
-	# bpy.app.handlers.render_pre.remove(render_start_time)
-	bpy.app.handlers.render_init.remove(render_start_time)
+	# bpy.app.handlers.render_pre.remove(auto_save_render_start)
+	bpy.app.handlers.render_init.remove(auto_save_render_start)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
 	# bpy.app.handlers.render_post.remove(auto_save_render)
 	bpy.app.handlers.render_cancel.remove(auto_save_render)

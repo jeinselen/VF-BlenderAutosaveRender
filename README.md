@@ -1,8 +1,8 @@
 # VF Auto Save Render
 
-Automatically saves a numbered or dated image after every render. This Blender Add-on is designed to make test renders easier to review, saving what would otherwise be lost when quitting the app. It's also good for creating a progression timelapse after a project is complete, or naming rendered files with the currently selected object or other custom settings.
+Automatically saves a numbered or dated image after every render and can extend the Blender output path with dynamic variables. This Blender Add-on is designed to make test renders easier to review, saving what would otherwise be lost when quitting the app. It's also good for creating a progression timelapse after a project is complete, or naming rendered files with the currently selected object or other custom settings.
 
-![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot.jpg)
+![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot.png)
 
 ## Installation and usage
 - Download [VF_autoSaveRender.py](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutoSaveRender/main/VF_autoSaveRender.py)
@@ -11,15 +11,19 @@ Automatically saves a numbered or dated image after every render. This Blender A
 - It will be enabled by default in the Render Output panel, where you can customise the automatic file output settings
 
 ## Add-on Preferences
-![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1.jpg)
+
+![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1.png)
+
 Add-on preferences are found in the plugin listing in the Add-on panel of the user preferences.
 
 - `Show Total Render Time` toggles the "total time spent rendering" display in the project settings (turned off by default)
 - `Total Render Time` shows the raw value in seconds in case you need to manually override the project-specific value
+- `Process Output File Path` toggles filtering of the Blender file output name for specific variables (turned off by default)
 
 ## Project Settings
 
-![screenshot of the add-on's project settings panel with customised settings](images/screenshot2.jpg)
+![screenshot of the add-on's project settings panel with customised auto save settings](images/screenshot2.png)
+
 Project settings are found at the bottom of the Render Output panel and are unique per-project. The Add-on can be disabled here by unchecking `Auto Save Render` (turned on by default).
 
 ### Autosave Location
@@ -63,6 +67,14 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 ### Total Time Spent Rendering
 
 - This tracks the total number of hours, minutes, and seconds spent rendering the current project, and the output panel display can be turned on in the Add-on Preferences (see above)
+
+### Render Output Variables
+
+![screenshot of the add-on's project settings panel with the output variables](images/screenshot3.png)
+
+If enabled in the add-on preferences, this extends the native Blender output path with many of the `Custom String` variables listed above: `{project}` `{item}` `{camera}` `{renderengine}` `{date}` `{time}` `{serial}`
+
+This works well for automatic naming of animations, since the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
 ## Notes
 
