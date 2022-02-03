@@ -44,18 +44,19 @@ Project settings are found at the bottom of the Render Output panel and are uniq
   - This uses pattern replacement to allow for entirely unique file naming patterns
   - Supported variables:
     - `{project}` = the name of the Blender file
-    - `{item}` = active item (if no item is selected or active, this will return "None")
+    - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
     - `{camera}` = render camera (independent of selection or active status)
-    - `{frame}` = current frame padded to four digits
-    - `{renderengine}` = internal name of the current rendering engine
-    - `{rendertime}` = time spent rendering (this is calculated within the script and may not exactly match the render metadata since it's not included in the Python API)
+    - `{item}` = active item (if no item is selected or active, this will return "None")
+    - `{frame}` = current frame number (padded to four digits)
+    - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+    - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
     - `{date}` = current date in YYYY-MM-DD format
     - `{time}` = current time in HH-MM-SS format (using a 24 hour clock)
     - `{serial}` = automatically incremented serial number padded to 4 digits
 - `Serial Number`
-  - This input field only appears if the text `{serial}` appears in the `Custom String` setting, and automatically increments every time a render is saved while still allowing for user override if needed
+  - This input field only appears if the text `{serial}` appears in the `Custom String` setting, and automatically increments every time a render is saved (easily overwritten if you need to reset the count at any time)
 
-_Warning_: using a custom string may result in overwriting files or failing to save if the generated name is not unique (for example, if date and time or serial number variables are not included).
+_Warning_: using a custom string may result in overwriting files or failing to save if the generated name is not unique (for example, if date and time or serial number variables are not included). The creator of this plugin accepts no responsibility for data loss.
 
 ### File Format
 
@@ -63,6 +64,8 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 - `PNG`
 - `JPEG`
 - `OpenEXR MultiLayer`
+
+File formats will use whatever compression preferences habe been set in the project. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as your Blender output format and customise the settings, then switch back to PNG. When Auto Save Render outputs the preview file, it'll use the (now invisible) default JPG settings.
 
 ### Total Time Spent Rendering
 
@@ -72,7 +75,7 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 
 ![screenshot of the add-on's project settings panel with the output variables](images/screenshot3.png)
 
-If enabled in the add-on preferences, this extends the native Blender output path with many of the `Custom String` variables listed above: `{project}` `{item}` `{camera}` `{renderengine}` `{date}` `{time}` `{serial}`
+If enabled in the add-on preferences, this extends the native Blender output path with many of the `Custom String` variables listed above: `{project}` `{scene}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}`
 
 This works well for automatic naming of animations, since the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 

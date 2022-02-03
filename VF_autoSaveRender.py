@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 5, 0),
+	"version": (1, 5, 1),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -122,8 +122,9 @@ def auto_save_render(scene):
 		return format(highest+1, '04')
 
 	# Create the rest of the file name components (projectname has already been created above)
-	itemname = bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None'
+	scenename = bpy.context.scene.name
 	cameraname = bpy.context.scene.camera.name
+	itemname = bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None'
 	framenumber = format(bpy.context.scene.frame_current, '04')
 	renderengine = bpy.context.engine.replace('BLENDER_', '')
 	rendertime = str(render_time)
@@ -142,8 +143,9 @@ def auto_save_render(scene):
 		filename = bpy.context.scene.auto_save_render_settings.file_name_custom
 		# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
 		filename = filename.replace("{project}", projectname)
-		filename = filename.replace("{item}", itemname)
+		filename = filename.replace("{scene}", scenename)
 		filename = filename.replace("{camera}", cameraname)
+		filename = filename.replace("{item}", itemname)
 		filename = filename.replace("{frame}", framenumber)
 		filename = filename.replace("{renderengine}", renderengine)
 		filename = filename.replace("{rendertime}", rendertime)
@@ -189,8 +191,9 @@ def auto_save_render_start(scene):
 
 		# Process file path variables
 		filepath = filepath.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
-		filepath = filepath.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
+		filepath = filepath.replace("{scene}", bpy.context.scene.name)
 		filepath = filepath.replace("{camera}", bpy.context.scene.camera.name)
+		filepath = filepath.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
 		filepath = filepath.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
 		filepath = filepath.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
 		filepath = filepath.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
@@ -243,7 +246,7 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		default=False)
 	# default_file_name_custom: bpy.props.StringProperty(
 	# 	name="Custom String",
-	# 	description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}",
+	# 	description="Options: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
 	# 	default="{project}-{serial}-{renderengine}-{rendertime}",
 	# 	maxlen=4096)
 
@@ -257,7 +260,7 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		layout.prop(self, "filter_output_file_path")
 		# if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
 			# box = layout.box()
-			# box.label(text="Output Path Variables: {project} {item} {camera} {renderengine} {date} {time} {serial}")
+			# box.label(text="Output Path Variables: {project} {scene} {camera} {item} {renderengine} {date} {time} {serial}")
 		# layout.prop(self, 'default_file_name_custom')
 
 ###########################################################################
@@ -288,7 +291,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		default='SERIAL')
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
-		description="Options: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}",
+		description="Options: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
 		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
 	file_name_serial: bpy.props.IntProperty(
@@ -342,7 +345,7 @@ class RENDER_PT_auto_save_render_path(bpy.types.Panel):
 			if '{serial}' in bpy.context.scene.render.filepath:
 				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
 			box = layout.box()
-			box.label(text="Output Path Variables: {project} {item} {camera} {renderengine} {date} {time} {serial}")
+			box.label(text="Output Path Variables: {project} {scene} {camera} {item} {renderengine} {date} {time} {serial}")
 
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -381,7 +384,7 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			box = layout.box()
 			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				# box.label(text="Custom String Variables: {project} {item} {camera} {frame} {renderengine} {rendertime} {date} {time} {serial}")
+				# box.label(text="Custom String Variables: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
 classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render)
