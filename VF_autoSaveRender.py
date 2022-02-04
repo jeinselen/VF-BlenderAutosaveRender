@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 5, 1),
+	"version": (1, 5, 2),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -87,8 +87,8 @@ def auto_save_render(scene):
 		scene.render.image_settings.file_format = 'JPEG'
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'PNG':
 		scene.render.image_settings.file_format = 'PNG'
-	elif bpy.context.scene.auto_save_render_settings.file_format == 'OPEN_EXR_MULTILAYER':
-		scene.render.image_settings.file_format = 'OPEN_EXR_MULTILAYER'
+	elif bpy.context.scene.auto_save_render_settings.file_format == 'OPEN_EXR':
+		scene.render.image_settings.file_format = 'OPEN_EXR'
 	extension = scene.render.file_extension
 
 	# Set location and file name variables
@@ -167,7 +167,8 @@ def auto_save_render(scene):
 		print('VF Auto Save Render: Render Result not found. Image not saved')
 		return
 
-	image.save_render(filename, scene=None)
+	# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
+	image.save_render(filename, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
 
 	# Restore original user settings for render output
 	scene.render.image_settings.file_format = original_format
@@ -304,7 +305,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 			('SCENE', 'Project Setting', 'Same format as set in output panel'),
 			('PNG', 'PNG', 'Save as png'),
 			('JPEG', 'JPEG', 'Save as jpeg'),
-			('OPEN_EXR_MULTILAYER', 'OpenEXR MultiLayer', 'Save as multilayer exr'),
+			('OPEN_EXR', 'OpenEXR', 'Save as exr'),
 			],
 		default='JPEG')
 	start_date: bpy.props.StringProperty(
@@ -381,6 +382,13 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 				layout.use_property_split = True
 				layout.prop(context.scene.auto_save_render_settings, 'file_name_serial')
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
+		if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
+			error = layout.box()
+			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
+				# box.label(text="Custom String Variables: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
+			error.label(text="Warning: Blender Python API does not support saving multilayer EXR files")
+			error.label(text="Report: https://developer.blender.org/T71087")
+			error.label(text="Result: single layer EXR file will be saved instead")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			box = layout.box()
 			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':

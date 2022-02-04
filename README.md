@@ -60,10 +60,10 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 
 ### File Format
 
-- `Project Setting` will use the same format as set in the Render Output panel
+- `Project Setting` will use the same format as set in the Render Output panel (see note below about multilayer limitations)
 - `PNG`
 - `JPEG`
-- `OpenEXR MultiLayer`
+- `OpenEXR`
 
 File formats will use whatever compression preferences habe been set in the project. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as your Blender output format and customise the settings, then switch back to PNG. When Auto Save Render outputs the preview file, it'll use the (now invisible) default JPG settings.
 
@@ -85,3 +85,4 @@ This works well for automatic naming of animations, since the variables are proc
 - Only the final frame will be atuo saved when rendering sequences, preventing mass dupliation but still allowing for total render time to be saved in the file name (depending on settings)
 - Total render time will continue to increment even when auto file saving is toggled off in the output panel
 - Total render time will _not_ increment when rendering files from the command line, since it depends on being saved within the project file (and rendering from the command line typically doesn't save the project file after rendering finishes)
+- The Blender Python API `image.save_image` has a known bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087), saving only a single layer file instead (I'm not aware of any reasonable workarounds, just waiting for it to be fixed)
