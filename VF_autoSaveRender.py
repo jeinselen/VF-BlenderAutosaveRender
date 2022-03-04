@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 6, 0),
+	"version": (1, 6, 1),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -123,6 +123,7 @@ def auto_save_render(scene):
 
 	# Create the rest of the file name components (projectname has already been created above)
 	scenename = bpy.context.scene.name
+	collectionname =  bpy.context.collection.name
 	cameraname = bpy.context.scene.camera.name
 	itemname = bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None'
 	framenumber = format(bpy.context.scene.frame_current, '04')
@@ -144,6 +145,7 @@ def auto_save_render(scene):
 		# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
 		filename = filename.replace("{project}", projectname)
 		filename = filename.replace("{scene}", scenename)
+		filename = filename.replace("{collection}", collectionname)
 		filename = filename.replace("{camera}", cameraname)
 		filename = filename.replace("{item}", itemname)
 		filename = filename.replace("{frame}", framenumber)
@@ -221,6 +223,7 @@ def auto_save_render_start(scene):
 		# Process file path variables
 		filepath = filepath.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 		filepath = filepath.replace("{scene}", bpy.context.scene.name)
+		filepath = filepath.replace("{collection}", bpy.context.collection.name)
 		filepath = filepath.replace("{camera}", bpy.context.scene.camera.name)
 		filepath = filepath.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
 		filepath = filepath.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
@@ -324,7 +327,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		default='SERIAL')
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
-		description="Options: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
+		description="Options: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
 		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
 	file_name_serial: bpy.props.IntProperty(
@@ -378,7 +381,7 @@ class RENDER_PT_auto_save_render_path(bpy.types.Panel):
 			if '{serial}' in bpy.context.scene.render.filepath:
 				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
 			box = layout.box()
-			box.label(text="Output Path Variables: {project} {scene} {camera} {item} {renderengine} {date} {time} {serial}")
+			box.label(text="Output Path Variables: {project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial}")
 
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -417,14 +420,14 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
 			error = layout.box()
 			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				# box.label(text="Custom String Variables: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
+				# box.label(text="Custom String Variables: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			error.label(text="Warning: Blender Python API does not support saving multilayer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
 			error.label(text="Result: single layer EXR file will be saved instead")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			box = layout.box()
 			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				# box.label(text="Custom String Variables: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
+				# box.label(text="Custom String Variables: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
 classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render)
