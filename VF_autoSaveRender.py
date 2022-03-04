@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 5, 2),
+	"version": (1, 6, 0),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -81,7 +81,7 @@ def auto_save_render(scene):
 	# Set up render output formatting
 	if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE':
 		if original_format not in IMAGE_FORMATS:
-			print('VF Auto Save Render: {} is not an image format, not saving'.format(original_format))
+			print('VF Auto Save Render: {} is not an image format. Image not saved.'.format(original_format))
 			return
 	elif bpy.context.scene.auto_save_render_settings.file_format == 'JPEG':
 		scene.render.image_settings.file_format = 'JPEG'
@@ -101,7 +101,7 @@ def auto_save_render(scene):
 
 	# Create the project subfolder if it doesn't already exist
 	if not os.path.exists(filepath):
-		os.mkdir(filepath)
+		os.makedirs(filepath)
 
 	# Generate the serial number
 		# Finds all of the image files in the selected directory that start with projectname
@@ -164,7 +164,7 @@ def auto_save_render(scene):
 	# Save image file
 	image = bpy.data.images['Render Result']
 	if not image:
-		print('VF Auto Save Render: Render Result not found. Image not saved')
+		print('VF Auto Save Render: Render Result not found. Image not saved.')
 		return
 
 	# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
@@ -174,6 +174,34 @@ def auto_save_render(scene):
 	scene.render.image_settings.file_format = original_format
 	scene.render.image_settings.color_mode = original_colormode
 	scene.render.image_settings.color_depth = original_colordepth
+
+	# Save external log file
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
+		# Log file settings
+		logname = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_log_name
+		logname = logname.replace("{project}", projectname)
+		logpath = os.path.join(os.path.dirname(bpy.data.filepath), logname) # Limited to locations local to the project file
+		logtitle = 'Total Render Time: '
+		logtime = 0.00
+
+		# Get previous time spent rendering, if log file exists, and convert formatted string into seconds
+		if os.path.exists(logpath):
+			with open(logpath) as filein:
+				logtime = filein.read().replace(logtitle, '')
+				logtime = readableToSeconds(logtime)
+		# Create log file directory location if it doesn't exist
+		elif not os.path.exists(os.path.dirname(logpath)): # Safety net just in case a folder was included in the file name entry
+			os.makedirs(os.path.dirname(logpath))
+
+		# Add the latest render time
+		logtime += float(render_time)
+
+		# Convert seconds into formatted string
+		logtime = secondsToReadable(logtime)
+
+		# Write log file
+		with open(logpath, 'w') as fileout:
+			fileout.write(logtitle + logtime)
 
 	return {'FINISHED'}
 
@@ -237,32 +265,36 @@ def get_directory(self):
 class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 	bl_idname = __name__
 
-	show_total_render_time: bpy.props.BoolProperty(
-		name="Show Total Render Time",
-		description='Displays the total amount of time spent rendering a project in the output panel',
-		default=False)
 	filter_output_file_path: bpy.props.BoolProperty(
 		name="Process Output File Path",
 		description='Implements some of the same keywords used in the custom naming scheme in the Output directory',
+		default=True)
+	show_total_render_time: bpy.props.BoolProperty(
+		name="Show Internal Total Render Time",
+		description='Displays the total time spent rendering a project in the output panel',
+		default=True)
+	external_render_time: bpy.props.BoolProperty(
+		name="Save External Render Time Log",
+		description='Saves the total time spent rendering to an external log file',
 		default=False)
-	# default_file_name_custom: bpy.props.StringProperty(
-	# 	name="Custom String",
-	# 	description="Options: {project} {scene} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
-	# 	default="{project}-{serial}-{renderengine}-{rendertime}",
-	# 	maxlen=4096)
+	external_log_name: bpy.props.StringProperty(
+		name="File Name",
+		description="Log file name; use {project} for per-project tracking, remove it for per-directory tracking",
+		default="{project}-TotalRenderTime.txt",
+		maxlen=4096)
 
 	def draw(self, context):
 		layout = self.layout
 		# layout.label(text="Addon Default Preferences")
-		grid = layout.grid_flow(row_major=True)
+		layout.prop(self, "filter_output_file_path")
+		grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		grid.prop(self, "show_total_render_time")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 			grid.prop(context.scene.auto_save_render_settings, 'total_render_time')
-		layout.prop(self, "filter_output_file_path")
-		# if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
-			# box = layout.box()
-			# box.label(text="Output Path Variables: {project} {scene} {camera} {item} {renderengine} {date} {time} {serial}")
-		# layout.prop(self, 'default_file_name_custom')
+		grid2 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+		grid2.prop(self, "external_render_time")
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
+			grid2.prop(self, "external_log_name", text='')
 
 ###########################################################################
 # Project settings and UI rendering classes
