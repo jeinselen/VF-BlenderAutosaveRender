@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 7, 0),
+	"version": (1, 7, 1),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -71,7 +71,16 @@ def auto_save_render(scene):
 
 	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
 	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.auto_save_render_settings.output_file_node:
-		bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.auto_save_render_settings.output_file_node
+		# bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.auto_save_render_settings.output_file_node
+		paths = bpy.context.scene.auto_save_render_settings.output_file_node
+		# Split the saved string back into individual pieces
+		paths = paths.split("||||")
+		slotpaths = paths[1].split("||")
+
+		# Replace node path and slots with the processed version
+		bpy.context.scene.node_tree.nodes["File Output"].base_path = paths[0]
+		for num, slot in enumerate(bpy.context.scene.node_tree.nodes["File Output"].file_slots):
+			slot.path = slotpaths[num]
 
 	# Stop here if the auto output is disabled
 	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
@@ -216,17 +225,37 @@ def auto_save_render_start(scene):
 		scene.render.filepath = replaceVariables(filepath)
 
 	# Filter compositing node file path if enabled
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes:
-		# Save original file path
-		bpy.context.scene.auto_save_render_settings.output_file_node = filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
+	# Trusting the short-circuit boolean expression ("not technically lazy") evaluation in Python means this lengthy series of ANDs doesn't run into any issues at the end if the node doesn't exist
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
+		# Get file path
+		# filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
+
+		# Get file path and all output file names
+		paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path + '||']
+		for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
+			paths.append(slot.path)
+		paths = '||'.join(paths)
+
+		# Save original paths
+		bpy.context.scene.auto_save_render_settings.output_file_node = paths
 
 		# Check if the serial variable is used
-		if '{serial}' in filepath:
-			filepath = filepath.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.output_file_serial, '04'))
+		if '{serial}' in paths:
+			paths = paths.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.output_file_serial, '04'))
 			serialUsed = True
 
-		# Replace scene filepath output with the processed version
-		bpy.context.scene.node_tree.nodes["File Output"].base_path = replaceVariables(filepath)
+		# Process entire string
+		paths = replaceVariables(paths)
+
+		# Split the string back into individual pieces (this is the STUPIDEST solution, but I'm not confident I can do it in any sort of respectable way while also storing the original string in a Blender preference to be returned later)
+		paths = paths.split("||||")
+		slotpaths = paths[1].split("||")
+
+		# Replace node path and slots with the processed version
+		bpy.context.scene.node_tree.nodes["File Output"].base_path = paths[0]
+		for num, slot in enumerate(bpy.context.scene.node_tree.nodes["File Output"].file_slots):
+			slot.path = slotpaths[num]
+		# bpy.context.scene.node_tree.nodes["File Output"].base_path = replaceVariables(filepath)
 
 	# Increment the serial number if it was used once or more
 	if serialUsed:
