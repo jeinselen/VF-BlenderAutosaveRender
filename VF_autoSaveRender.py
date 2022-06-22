@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 6, 1),
+	"version": (1, 7, 0),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -69,6 +69,10 @@ def auto_save_render(scene):
 	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.auto_save_render_settings.output_file_path:
 		scene.render.filepath = bpy.context.scene.auto_save_render_settings.output_file_path
 
+	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.auto_save_render_settings.output_file_node:
+		bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.auto_save_render_settings.output_file_node
+
 	# Stop here if the auto output is disabled
 	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
 		return {'CANCELLED'}
@@ -103,59 +107,41 @@ def auto_save_render(scene):
 	if not os.path.exists(filepath):
 		os.makedirs(filepath)
 
-	# Generate the serial number
-		# Finds all of the image files in the selected directory that start with projectname
-	files = [f for f in os.listdir(filepath)
-			if f.startswith(projectname)
-			and f.lower().endswith(IMAGE_EXTENSIONS)]
-
-		# Searches the file collection and returns the next highest number as a 4 digit string
-	def save_number_from_files(files):
-		highest = 0
-		if files:
-			for f in files:
-				# find filenames that end with four or more digits
-				suffix = findall(r'\d{4,}$', os.path.splitext(f)[0].split(projectname)[-1], multiline)
-				if suffix:
-					if int(suffix[-1]) > highest:
-						highest = int(suffix[-1])
-		return format(highest+1, '04')
-
-	# Create the rest of the file name components (projectname has already been created above)
-	scenename = bpy.context.scene.name
-	collectionname =  bpy.context.collection.name
-	cameraname = bpy.context.scene.camera.name
-	itemname = bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None'
-	framenumber = format(bpy.context.scene.frame_current, '04')
-	renderengine = bpy.context.engine.replace('BLENDER_', '')
-	rendertime = str(render_time)
-	datenumber = datetime.datetime.now().strftime('%Y-%m-%d')
-	timenumber = datetime.datetime.now().strftime('%H-%M-%S')
-	serialnumber = save_number_from_files(files)
-
-	# Compile the output file name
+	# Create the output file name string
 	if bpy.context.scene.auto_save_render_settings.file_name_type == 'SERIAL':
-		filename = projectname + '-' + serialnumber
+		# Generate dynamic serial number
+		# Finds all of the image files that start with projectname in the selected directory
+		files = [f for f in os.listdir(filepath)
+				if f.startswith(projectname)
+				and f.lower().endswith(IMAGE_EXTENSIONS)]
+		# Searches the file collection and returns the next highest number as a 4 digit string
+		def save_number_from_files(files):
+			highest = 0
+			if files:
+				for f in files:
+					# find filenames that end with four or more digits
+					suffix = findall(r'\d{4,}$', os.path.splitext(f)[0].split(projectname)[-1], multiline)
+					if suffix:
+						if int(suffix[-1]) > highest:
+							highest = int(suffix[-1])
+			return format(highest+1, '04')
+		# Create string with serial number
+		filename = '{project}-' + save_number_from_files(files)
 	elif bpy.context.scene.auto_save_render_settings.file_name_type == 'DATE':
-		filename = projectname + ' ' + datenumber + ' ' + timenumber
+		filename = '{project} {date} {time}'
 	elif bpy.context.scene.auto_save_render_settings.file_name_type == 'RENDER':
-		filename = projectname + ' ' + renderengine + ' ' + rendertime
+		# Render time is not availble in the global variable replacement becuase it's computed in the above section of code, not universally available
+		filename = '{project} {renderengine} ' + str(render_time)
 	else:
+		# Load custom file name and process elements that aren't available in the global variable replacement
 		filename = bpy.context.scene.auto_save_render_settings.file_name_custom
-		# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
-		filename = filename.replace("{project}", projectname)
-		filename = filename.replace("{scene}", scenename)
-		filename = filename.replace("{collection}", collectionname)
-		filename = filename.replace("{camera}", cameraname)
-		filename = filename.replace("{item}", itemname)
-		filename = filename.replace("{frame}", framenumber)
-		filename = filename.replace("{renderengine}", renderengine)
-		filename = filename.replace("{rendertime}", rendertime)
-		filename = filename.replace("{date}", datenumber)
-		filename = filename.replace("{time}", timenumber)
-		if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
+		filename = filename.replace("{rendertime}", str(render_time))
+		if '{serial}' in filename:
 			filename = filename.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.file_name_serial, '04'))
 			bpy.context.scene.auto_save_render_settings.file_name_serial += 1
+
+	# Replace global variables in the output file name string
+	filename = replaceVariables(filename)
 
 	# Add extension
 	filename += extension
@@ -214,27 +200,54 @@ def auto_save_render(scene):
 def auto_save_render_start(scene):
 	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.auto_save_render_settings.start_date = str(time.time())
+	serialUsed = False
 
 	# Filter output file path if enabled
 	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
 		# Save original file path
 		bpy.context.scene.auto_save_render_settings.output_file_path = filepath = scene.render.filepath
 
-		# Process file path variables
-		filepath = filepath.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
-		filepath = filepath.replace("{scene}", bpy.context.scene.name)
-		filepath = filepath.replace("{collection}", bpy.context.collection.name)
-		filepath = filepath.replace("{camera}", bpy.context.scene.camera.name)
-		filepath = filepath.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
-		filepath = filepath.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
-		filepath = filepath.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
-		filepath = filepath.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+		# Check if the serial variable is used
 		if '{serial}' in filepath:
 			filepath = filepath.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.output_file_serial, '04'))
-			bpy.context.scene.auto_save_render_settings.output_file_serial += 1
+			serialUsed = True
 
 		# Replace scene filepath output with the processed version
-		scene.render.filepath = filepath
+		scene.render.filepath = replaceVariables(filepath)
+
+	# Filter compositing node file path if enabled
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes:
+		# Save original file path
+		bpy.context.scene.auto_save_render_settings.output_file_node = filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
+
+		# Check if the serial variable is used
+		if '{serial}' in filepath:
+			filepath = filepath.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.output_file_serial, '04'))
+			serialUsed = True
+
+		# Replace scene filepath output with the processed version
+		bpy.context.scene.node_tree.nodes["File Output"].base_path = replaceVariables(filepath)
+
+	# Increment the serial number if it was used once or more
+	if serialUsed:
+		bpy.context.scene.auto_save_render_settings.output_file_serial += 1
+
+###########################################################################
+# Variable replacement function for globally accessible variables (serial number must be provided)
+# Excludes {rendertime} as it does not exist at the start of rendering
+
+def replaceVariables(string):
+	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
+	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
+	string = string.replace("{scene}", bpy.context.scene.name)
+	string = string.replace("{collection}", bpy.context.collection.name)
+	string = string.replace("{camera}", bpy.context.scene.camera.name)
+	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
+	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
+	string = string.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
+	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
+	string = string.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+	return string
 
 ###########################################################################
 # Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
@@ -269,8 +282,8 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 	bl_idname = __name__
 
 	filter_output_file_path: bpy.props.BoolProperty(
-		name="Process Output File Path",
-		description='Implements some of the same keywords used in the custom naming scheme in the Output directory',
+		name='Process Output File Path and "File Output" Compositing Node',
+		description='Implements most of the same keywords used in the custom naming scheme in the Output directory and (if enabled and added) a Compositing tab "File Output" node',
 		default=True)
 	show_total_render_time: bpy.props.BoolProperty(
 		name="Show Internal Total Render Time",
@@ -356,6 +369,10 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	output_file_path: bpy.props.StringProperty(
 		name="Original Render Path",
 		description="Stores the original render path as a string to allow for successful restoration after rendering completes",
+		default="")
+	output_file_node: bpy.props.StringProperty(
+		name="Original Node Path",
+		description="Stores the original node path as a string to allow for successful restoration after rendering completes",
 		default="")
 	output_file_serial: bpy.props.IntProperty(
 		name="Serial Number",
