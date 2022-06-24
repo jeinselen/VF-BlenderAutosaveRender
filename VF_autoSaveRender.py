@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 7, 2),
+	"version": (1, 7, 3),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -145,6 +145,7 @@ def auto_save_render(scene):
 		# Load custom file name and process elements that aren't available in the global variable replacement
 		filename = bpy.context.scene.auto_save_render_settings.file_name_custom
 		filename = filename.replace("{rendertime}", str(render_time))
+		# Remember that auto save serial number is separate from the project serial number, which is handled in the global variable function
 		if '{serial}' in filename:
 			filename = filename.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.file_name_serial, '04'))
 			bpy.context.scene.auto_save_render_settings.file_name_serial += 1
@@ -209,6 +210,7 @@ def auto_save_render(scene):
 def auto_save_render_start(scene):
 	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.auto_save_render_settings.start_date = str(time.time())
+	# Track usage of the global serial number in both file output and output nodes to ensure it's only incremented once
 	serialUsed = False
 
 	# Filter output file path if enabled
@@ -247,7 +249,7 @@ def auto_save_render_start(scene):
 		# Process entire string
 		paths = replaceVariables(paths)
 
-		# Split the string back into individual pieces (this is the STUPIDEST solution, but I'm not confident I can do it in any sort of respectable way while also storing the original string in a Blender preference to be returned later)
+		# Split the string back into individual pieces (this is the STUPIDEST solution, but I'm not confident I can do it in any sort of respectable way while also storing the original string in a Blender preference to be restored later)
 		paths = paths.split("||||")
 		slotpaths = paths[1].split("||")
 
@@ -265,6 +267,9 @@ def auto_save_render_start(scene):
 # Variable replacement function for globally accessible variables (serial number must be provided)
 # Excludes {rendertime} as it does not exist at the start of rendering
 
+variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial} {frame}'
+variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {rendertime} {date} {time} {serial} {frame}'
+
 def replaceVariables(string):
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
@@ -272,10 +277,10 @@ def replaceVariables(string):
 	string = string.replace("{collection}", bpy.context.collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
-	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	string = string.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
 	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
 	string = string.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	return string
 
 ###########################################################################
@@ -377,7 +382,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		default='SERIAL')
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
-		description="Options: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}",
+		description="Variables: " + variableListExpanded,
 		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
 	file_name_serial: bpy.props.IntProperty(
@@ -435,7 +440,7 @@ class RENDER_PT_auto_save_render_path(bpy.types.Panel):
 			if '{serial}' in bpy.context.scene.render.filepath:
 				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
 			box = layout.box()
-			box.label(text="Output Path Variables: {project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial}")
+			box.label(text="Variables: "+ variableList)
 
 class RENDER_PT_auto_save_render_node(bpy.types.Panel):
 	bl_space_type = 'NODE_EDITOR'
@@ -463,7 +468,7 @@ class RENDER_PT_auto_save_render_node(bpy.types.Panel):
 			if '{serial}' in paths:
 				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
 			box = layout.box()
-			box.label(text="Variables: {project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial}")
+			box.label(text="Variables: "+ variableList)
 
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -475,7 +480,6 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 
 	# Check for engine compatibility
 	# compatible_render_engines = {'BLENDER_RENDER', 'BLENDER_OPENGL', 'BLENDER_WORKBENCH', 'BLENDER_EEVEE', 'CYCLES', 'RPR', 'LUXCORE'}
-
 	# @classmethod
 	# def poll(cls, context):
 		# return (context.engine in cls.compatible_render_engines)
@@ -490,7 +494,7 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.use_property_split = True
 		layout.prop(context.scene.auto_save_render_settings, 'file_name_type', icon='FILE_TEXT')
 		if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-			# this is intended as a semi-hacky way to override the initial custom string with a global preset instead of relying on get/set
+			# this is a semi-hacky way to override the initial custom string with a global preset instead of relying on get/set
 			# if '{unset}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
 				# bpy.context.scene.auto_save_render_settings.file_name_custom = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.default_file_name_custom
 			layout.use_property_split = True
@@ -501,16 +505,15 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.prop(context.scene.auto_save_render_settings, 'file_format', icon='FILE_IMAGE')
 		if bpy.context.scene.auto_save_render_settings.file_format == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
 			error = layout.box()
-			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				# box.label(text="Custom String Variables: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			error.label(text="Warning: Blender Python API does not support saving multilayer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
 			error.label(text="Result: single layer EXR file will be saved instead")
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time or bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
 			box = layout.box()
-			# if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				# box.label(text="Custom String Variables: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
-			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
+			if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
+				box.label(text="Variables: " + variableListExpanded)
+			if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
+				box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
 classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render_node, RENDER_PT_auto_save_render)
 
