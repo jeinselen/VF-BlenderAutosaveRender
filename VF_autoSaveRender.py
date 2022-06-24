@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 7, 1),
+	"version": (1, 7, 2),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -70,7 +70,7 @@ def auto_save_render(scene):
 		scene.render.filepath = bpy.context.scene.auto_save_render_settings.output_file_path
 
 	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.auto_save_render_settings.output_file_node:
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.auto_save_render_settings.output_file_node:
 		# bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.auto_save_render_settings.output_file_node
 		paths = bpy.context.scene.auto_save_render_settings.output_file_node
 		# Split the saved string back into individual pieces
@@ -226,7 +226,7 @@ def auto_save_render_start(scene):
 
 	# Filter compositing node file path if enabled
 	# Trusting the short-circuit boolean expression ("not technically lazy") evaluation in Python means this lengthy series of ANDs doesn't run into any issues at the end if the node doesn't exist
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
 		# Get file path
 		# filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
 
@@ -311,8 +311,12 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 	bl_idname = __name__
 
 	filter_output_file_path: bpy.props.BoolProperty(
-		name='Process Output File Path and "File Output" Compositing Node',
-		description='Implements most of the same keywords used in the custom naming scheme in the Output directory and (if enabled and added) a Compositing tab "File Output" node',
+		name='Process Output File Path',
+		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
+		default=True)
+	filter_output_file_node: bpy.props.BoolProperty(
+		name='Process "File Output" Compositing Node',
+		description='Implements most of the same keywords used in the custom naming scheme in a Compositing tab "File Output" node',
 		default=True)
 	show_total_render_time: bpy.props.BoolProperty(
 		name="Show Internal Total Render Time",
@@ -331,11 +335,15 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 	def draw(self, context):
 		layout = self.layout
 		# layout.label(text="Addon Default Preferences")
-		layout.prop(self, "filter_output_file_path")
-		grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
-		grid.prop(self, "show_total_render_time")
+		grid0 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+		grid0.prop(self, "filter_output_file_path")
+		grid0.prop(self, "filter_output_file_node")
+
+		grid1 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+		grid1.prop(self, "show_total_render_time")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
-			grid.prop(context.scene.auto_save_render_settings, 'total_render_time')
+			grid1.prop(context.scene.auto_save_render_settings, 'total_render_time')
+
 		grid2 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		grid2.prop(self, "external_render_time")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
@@ -429,6 +437,34 @@ class RENDER_PT_auto_save_render_path(bpy.types.Panel):
 			box = layout.box()
 			box.label(text="Output Path Variables: {project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial}")
 
+class RENDER_PT_auto_save_render_node(bpy.types.Panel):
+	bl_space_type = 'NODE_EDITOR'
+	bl_region_type = 'UI'
+	bl_category = "Node"
+	bl_label = "Output Path Variables"
+	bl_parent_id = "NODE_PT_active_node_properties"
+	bl_options = {'HIDE_HEADER'}
+
+	# def draw_header(self, context):
+		# self.layout.prop(bpy.context.scene.render, 'use_border', text='')
+
+	def draw(self, context):
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.active_node.bl_idname == 'CompositorNodeOutputFile' and bpy.context.active_node.name == 'File Output':
+			layout = self.layout
+			layout.use_property_decorate = False  # No animation
+			layout.use_property_split = True
+			
+			# Get file path and all output file names from the primary node
+			paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
+			for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
+				paths.append(slot.path)
+			paths = ''.join(paths)
+
+			if '{serial}' in paths:
+				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
+			box = layout.box()
+			box.label(text="Variables: {project} {scene} {collection} {camera} {item} {renderengine} {date} {time} {serial}")
+
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
@@ -476,7 +512,7 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 				# box.label(text="Custom String Variables: {project} {scene} {collection} {camera} {item} {frame} {renderengine} {rendertime} {date} {time} {serial}")
 			box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
-classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render)
+classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render_node, RENDER_PT_auto_save_render)
 
 ###########################################################################
 # Addon registration functions
