@@ -1,10 +1,10 @@
 # VF Auto Save Render
 
-Automatically saves a numbered or dated image after every render and can extend the Blender output path with dynamic variables. This Blender Add-on is designed to make test renders easier to review, saving what would otherwise be lost when quitting the app. It's also good for creating a progression timelapse after a project is complete, or naming rendered files with the currently selected object or other custom settings.
+Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables. This Blender Add-on helps automate file naming (enabling easier and more advanced production workflows) and makes test renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
 
 ![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot.png)
 
-## Installation and usage
+## Installation and Usage
 - Download [VF_autoSaveRender.py](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutoSaveRender/main/VF_autoSaveRender.py)
 - Open Blender Preferences and navigate to the "Add-ons" tab
 - Install and enable the Add-on
@@ -14,11 +14,18 @@ Automatically saves a numbered or dated image after every render and can extend 
 
 ![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1.png)
 
-Add-on preferences are found in the plugin listing in the Add-on panel of the user preferences.
+Add-on preferences are found in the Blender Preferences panel Add-on tab, at the bottom of the plugin listing. These settings apply globally to all projects except for the total render time, which is saved independently within each project file.
 
-- `Show Total Render Time` toggles the "total time spent rendering" display in the project settings (turned off by default)
-- `Total Render Time` shows the raw value in seconds in case you need to manually override the project-specific value
-- `Process Output File Path` toggles filtering of the Blender file output name for specific variables (turned off by default)
+- `Process Output File Path` enables dynamic variables in the output file path
+- `Process "File Output" Compositing Node` enables dynamic variables for the path and all image outputs of a Compositing tab node named "File Output" (see documentation below for more on this limitation)
+- `Show Internal Total Render Time` toggles the "total time spent rendering" display in the project settings
+  - `Total Render Time` shows the raw value in seconds in case you need to manually override the project-specific value
+- `Save External Render Time Log` enables tracking of render time outside of the Blender file, which better supports command line rendering or tallying the render time for all Blender projects in the same directory
+  - Sub-folders and relative paths can be used, but absolute paths are not supported
+  - Only the `{project}` dynamic variable is supported
+  - The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
+    - Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
+    - Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default auto save directory (this is specific to MacOS and Linux; backslash would be required in Windows)
 
 ## Project Settings
 
@@ -45,16 +52,17 @@ Project settings are found at the bottom of the Render Output panel and are uniq
   - Supported variables:
     - `{project}` = the name of the Blender file
     - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
+    - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
     - `{camera}` = render camera (independent of selection or active status)
     - `{item}` = active item (if no item is selected or active, this will return "None")
-    - `{frame}` = current frame number (padded to four digits)
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
     - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
     - `{date}` = current date in YYYY-MM-DD format
     - `{time}` = current time in HH-MM-SS format (using a 24 hour clock)
     - `{serial}` = automatically incremented serial number padded to 4 digits
+    - `{frame}` = current frame number (padded to four digits)
 - `Serial Number`
-  - This input field only appears if the text `{serial}` appears in the `Custom String` setting, and automatically increments every time a render is saved (easily overwritten if you need to reset the count at any time)
+  - This input field is displayed only when the text `{serial}` appears in the `Custom String` setting, and automatically increments every time a render is saved (easily overwritten if you need to reset the count at any time)
 
 _Warning_: using a custom string may result in overwriting files or failing to save if the generated name is not unique (for example, if date and time or serial number variables are not included). The creator of this plugin accepts no responsibility for data loss.
 
@@ -65,24 +73,41 @@ _Warning_: using a custom string may result in overwriting files or failing to s
 - `JPEG`
 - `OpenEXR`
 
-File formats will use whatever compression preferences habe been set in the project. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as your Blender output format and customise the settings, then switch back to PNG. When Auto Save Render outputs the preview file, it'll use the (now invisible) default JPG settings.
+File formats will use whatever compression preferences have been set in the project file. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as your Blender output format and customise the settings, then switch back to PNG. When the add-on saves the render file, it'll use the (now invisible) project file JPG settings.
 
 ### Total Time Spent Rendering
 
 - This tracks the total number of hours, minutes, and seconds spent rendering the current project, and the output panel display can be turned on in the Add-on Preferences (see above)
 
-### Render Output Variables
+## Render Output Variables
 
 ![screenshot of the add-on's project settings panel with the output variables](images/screenshot3.png)
 
-If enabled in the add-on preferences, this extends the native Blender output path with many of the `Custom String` variables listed above: `{project}` `{scene}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}`
+If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
+
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
 
 This works well for automatic naming of animations, since the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
+Note that `{rendertime}` is not included because it is still undetermined when Blender output values are created.
+
+## Compositing Node Variables
+
+![screenshot of the compositing tab file output node and sample settings with variables](images/screenshot4.png)
+
+If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
+
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
+
+This supports customisation of both the `Base Path` and each `File Subpath` (image name). There is a limitation however; only one `File Output` node is supported, and it must be named "File Output" (any additional output nodes will be ignored). If multiple output directories are needed, the workaround is to include the folder paths within the specific image output names, not the base path.
+
+Like the render output variables feature, this fully works with animations, including the date and time variables which are locked at render start. And as expected, `{rendertime}` is not included because it is still undetermined when Blender output values are initialised.
+
 ## Notes
 
-- Auto Save Render depends on the Blender file having been saved at least once in order to save images, otherwise there is no project name or directory for the Add-on to work with
+- Auto Save Render depends on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or directory for the add-on to work with
 - Only the final frame will be atuo saved when rendering sequences, preventing mass dupliation but still allowing for total render time to be saved in the file name (depending on settings)
-- Total render time will continue to increment even when auto file saving is toggled off in the output panel
-- Total render time will _not_ increment when rendering files from the command line, since it depends on being saved within the project file (and rendering from the command line typically doesn't save the project file after rendering finishes)
+- Total internal render time will continue to increment even when auto file saving is toggled off in the output panel
+- Total internal render time will not increment when rendering files from the command line, since it depends on being saved within the project file (and rendering from the command line typically doesn't save the project file after rendering finishes)
 - The Blender Python API `image.save_image` has a known bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087), saving only a single layer file instead (I'm not aware of any reasonable workarounds, just waiting for it to be fixed)
+- This add-on is used in regular production work by the author, but is offered here as-is with no guarantees regarding suitability, security, safety, or otherwise
