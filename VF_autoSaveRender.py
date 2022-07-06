@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 7, 3),
+	"version": (1, 8, 0),
 	"blender": (2, 80, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -17,6 +17,7 @@ bl_info = {
 # https://blender.stackexchange.com/questions/6842/how-to-get-the-directory-of-open-blend-file-from-python
 # https://github.com/AlreadyLegendary/Render-time-estimator
 # https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
+# https://blender.stackexchange.com/questions/196045/how-to-add-a-button-to-outliner-header-via-python-script
 
 import os
 import datetime
@@ -59,6 +60,9 @@ IMAGE_EXTENSIONS = (
 
 @persistent
 def auto_save_render(scene):
+	# Set estimated render time active to false (render is complete or canceled, estimate display is no longer needed)
+	bpy.context.scene.auto_save_render_settings.estimated_render_time_active = False
+
 	# Calculate elapsed render time
 	render_time = round(time.time() - float(bpy.context.scene.auto_save_render_settings.start_date), 2)
 
@@ -208,8 +212,12 @@ def auto_save_render(scene):
 
 @persistent
 def auto_save_render_start(scene):
+	# Set estimated render time active to false (must render at least one frame before estimating time remaining)
+	bpy.context.scene.auto_save_render_settings.estimated_render_time_active = False
+
 	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.auto_save_render_settings.start_date = str(time.time())
+
 	# Track usage of the global serial number in both file output and output nodes to ensure it's only incremented once
 	serialUsed = False
 
@@ -264,6 +272,30 @@ def auto_save_render_start(scene):
 		bpy.context.scene.auto_save_render_settings.output_file_serial += 1
 
 ###########################################################################
+# Render time remaining estimation function
+		
+@persistent
+def auto_save_render_estimate(scene):
+	# Save starting frame (before setting active to true, this should only happen once during a sequence)
+	if not bpy.context.scene.auto_save_render_settings.estimated_render_time_active:
+		bpy.context.scene.auto_save_render_settings.estimated_render_time_frame = bpy.context.scene.frame_current
+
+	# If it's not the last frame, estimate time remaining
+	if bpy.context.scene.frame_current < bpy.context.scene.frame_end:
+		bpy.context.scene.auto_save_render_settings.estimated_render_time_active = True
+		# Elapsed time (Current - Render Start)
+		render_time = time.time() - float(bpy.context.scene.auto_save_render_settings.start_date)
+		# Divide by number of frames completed
+		render_time /= bpy.context.scene.frame_current - bpy.context.scene.auto_save_render_settings.estimated_render_time_frame + 1.0
+		# Multiply by number of frames assumed unrendered (does not account for previously completed frames beyond the current frame)
+		render_time *= bpy.context.scene.frame_end - bpy.context.scene.frame_current
+		# Convert to readable and store
+		bpy.context.scene.auto_save_render_settings.estimated_render_time_value = secondsToReadable(render_time)
+		print('Estimated Time Remaining: ' + bpy.context.scene.auto_save_render_settings.estimated_render_time_value)
+	else:
+		bpy.context.scene.auto_save_render_settings.estimated_render_time_active = False
+
+###########################################################################
 # Variable replacement function for globally accessible variables (serial number must be provided)
 # Excludes {rendertime} as it does not exist at the start of rendering
 
@@ -310,11 +342,12 @@ def get_directory(self):
 	return self.get("file_location", bpy.context.scene.auto_save_render_settings.bl_rna.properties["file_location"].default)
 
 ###########################################################################
-# User preferences and UI rendering class
+# Global user preferences and UI rendering class
 
 class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 	bl_idname = __name__
 
+	# Global Variables
 	filter_output_file_path: bpy.props.BoolProperty(
 		name='Process Output File Path',
 		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
@@ -336,7 +369,12 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		description="Log file name; use {project} for per-project tracking, remove it for per-directory tracking",
 		default="{project}-TotalRenderTime.txt",
 		maxlen=4096)
+	remaining_render_time: bpy.props.BoolProperty(
+		name="Display Estimated Remaining Render Time",
+		description='Adds estimated remaining render time display to the image editor menu',
+		default=True)
 
+	# User Interface
 	def draw(self, context):
 		layout = self.layout
 		# layout.label(text="Addon Default Preferences")
@@ -354,8 +392,10 @@ class AutoSaveRenderPreferences(bpy.types.AddonPreferences):
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
 			grid2.prop(self, "external_log_name", text='')
 
+		layout.prop(self, "remaining_render_time")
+
 ###########################################################################
-# Project settings and UI rendering classes
+# Individual project settings
 
 class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 	enable_auto_save_render: bpy.props.BoolProperty(
@@ -398,6 +438,8 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 			('OPEN_EXR', 'OpenEXR', 'Save as exr'),
 			],
 		default='JPEG')
+
+	# Variables for render time calculation
 	start_date: bpy.props.StringProperty(
 		name="Render Start Date",
 		description="Stores the date when rendering started in seconds as a string",
@@ -406,6 +448,20 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		name="Total Render Time",
 		description="Stores the total time spent rendering in seconds",
 		default=0)
+
+	# Variables for render time estimation
+	estimated_render_time_active: bpy.props.BoolProperty(
+		name="Render Active",
+		description="Indicates if rendering is currently active",
+		default=False)
+	estimated_render_time_frame: bpy.props.IntProperty(
+		name="Starting frame",
+		description="Saves the starting frame when render begins (helps correctly estimate partial renders)",
+		default=0)
+	estimated_render_time_value: bpy.props.StringProperty(
+		name="Estimated Render Time",
+		description="Stores the estimated time remaining to render",
+		default="0:00:00.00")
 
 	# Variables for output file path processing
 	output_file_path: bpy.props.StringProperty(
@@ -420,6 +476,9 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		name="Serial Number",
 		description="Current serial number, automatically increments with every render")
 
+
+###########################################################################
+# UI rendering classes
 
 class RENDER_PT_auto_save_render_path(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -458,7 +517,7 @@ class RENDER_PT_auto_save_render_node(bpy.types.Panel):
 			layout = self.layout
 			layout.use_property_decorate = False  # No animation
 			layout.use_property_split = True
-			
+
 			# Get file path and all output file names from the primary node
 			paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
 			for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
@@ -515,6 +574,13 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 			if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 				box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
 
+# Time estimate display within the Image viewer
+def estimated_render_time(self, context):
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.remaining_render_time and bpy.context.scene.auto_save_render_settings.estimated_render_time_active:
+		self.layout.separator()
+		box = self.layout.box()
+		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.auto_save_render_settings.estimated_render_time_value + "")
+
 classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render_node, RENDER_PT_auto_save_render)
 
 ###########################################################################
@@ -524,25 +590,33 @@ def register():
 	for cls in classes:
 		bpy.utils.register_class(cls)
 	bpy.types.Scene.auto_save_render_settings = bpy.props.PointerProperty(type=AutoSaveRenderSettings)
-	# Using init instead of pre means that the entire animation render time is tracked instead of just the final frame
+	# Using init instead of render_pre means that the entire animation render time is tracked instead of just the final frame
 	# bpy.app.handlers.render_pre.append(auto_save_render_start)
 	bpy.app.handlers.render_init.append(auto_save_render_start)
+	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
+	bpy.app.handlers.render_post.append(auto_save_render_estimate)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
 	# bpy.app.handlers.render_post.append(auto_save_render)
 	bpy.app.handlers.render_cancel.append(auto_save_render)
 	bpy.app.handlers.render_complete.append(auto_save_render)
+	# Render estimate display
+	bpy.types.IMAGE_MT_editor_menus.append(estimated_render_time)
 
 def unregister():
 	for cls in reversed(classes):
 		bpy.utils.unregister_class(cls)
 	del bpy.types.Scene.auto_save_render_settings
-	# Using init instead of pre means that the entire animation render time is tracked instead of just the final frame
+	# Using init instead of render_pre means that the entire animation render time is tracked instead of just the final frame
 	# bpy.app.handlers.render_pre.remove(auto_save_render_start)
 	bpy.app.handlers.render_init.remove(auto_save_render_start)
+	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
+	bpy.app.handlers.render_post.remove(auto_save_render_estimate)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
 	# bpy.app.handlers.render_post.remove(auto_save_render)
 	bpy.app.handlers.render_cancel.remove(auto_save_render)
 	bpy.app.handlers.render_complete.remove(auto_save_render)
+	# Render estimate display
+	bpy.types.IMAGE_MT_editor_menus.remove(estimated_render_time)
 
 if __name__ == "__main__":
 	register()
