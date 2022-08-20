@@ -37,6 +37,7 @@ Project settings are found at the bottom of the Render Output panel and are uniq
 
 - Leave a single forward slash `/` to automatically generate a folder with the same name and in the same directory as the Blender project
 - Or select a specific directory such as `/project/renders/autosave/` to automatically save all renders to the same location
+- **Special case:** if the Blender file has not been saved yet, but an absolute path has been set in the autosave location, the add-on will attempt to still save files using "Blender" as a stand-in for the missing project name. This allows for quick rendering of files from a startup scene, but will not play nicely with custom serial numbers (since it would reset every time Blender opens, overwriting previous renders). Please use caution, and remember that this software is provided for free without warranty of any kind.
 
 ### File Name
 
@@ -110,4 +111,4 @@ Like the render output variables feature, this fully works with animations, incl
 - Total internal render time will continue to increment even when auto file saving is toggled off in the output panel
 - Total internal render time will not increment when rendering files from the command line, since it depends on being saved within the project file (and rendering from the command line typically doesn't save the project file after rendering finishes)
 - The Blender Python API `image.save_image` has a known bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087), saving only a single layer file instead (I'm not aware of any reasonable workarounds, just waiting for it to be fixed)
-- This add-on is used in regular production work by the author, but is offered here as-is with no guarantees regarding suitability, security, safety, or otherwise
+- This add-on is used in regular production work by the author, but is offered here as-is without warranty and with no guarantees regarding suitability, security, safety, or otherwise

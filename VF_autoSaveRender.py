@@ -1,8 +1,8 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 8, 0),
-	"blender": (2, 80, 0),
+	"version": (1, 8, 1),
+	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
 	"warning": "inexperienced developer, use at your own risk",
@@ -87,7 +87,8 @@ def auto_save_render(scene):
 			slot.path = slotpaths[num]
 
 	# Stop here if the auto output is disabled
-	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or not bpy.data.filepath:
+	# Or if the file is unsaved and the output file location hasn't been set to a non-root directory
+	if not bpy.context.scene.auto_save_render_settings.enable_auto_save_render or (not bpy.data.filepath and len(bpy.context.scene.auto_save_render_settings.file_location) <= 1):
 		return {'CANCELLED'}
 
 	# Save original file format settings
@@ -108,10 +109,11 @@ def auto_save_render(scene):
 		scene.render.image_settings.file_format = 'OPEN_EXR'
 	extension = scene.render.file_extension
 
-	# Set location and file name variables
-	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
+	# Set file name variable (if the file is unsaved, set to blank)
+	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0] if bpy.data.filepath else 'Blender'
 
-	if len(bpy.context.scene.auto_save_render_settings.file_location) <= 1:
+	# We've already cancelled processing if the project is unsaved and the file location isn't set; 'and bpy.data.filepath' is probably unnecessary, but safety first?
+	if len(bpy.context.scene.auto_save_render_settings.file_location) <= 1 and bpy.data.filepath:
 		filepath = os.path.join(os.path.dirname(bpy.data.filepath), projectname)
 	else:
 		filepath = bpy.context.scene.auto_save_render_settings.file_location
@@ -177,8 +179,8 @@ def auto_save_render(scene):
 	scene.render.image_settings.color_mode = original_colormode
 	scene.render.image_settings.color_depth = original_colordepth
 
-	# Save external log file
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
+	# Save external log file if enabled and the project has been saved (log is always saved relative to project location)
+	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time and bpy.data.filepath:
 		# Log file settings
 		logname = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_log_name
 		logname = logname.replace("{project}", projectname)
