@@ -26,6 +26,8 @@ Add-on preferences are found in the Blender Preferences panel Add-on tab, at the
   - The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
     - Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
     - Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default auto save directory (this is specific to MacOS and Linux; backslash would be required in Windows)
+- `Display Estimated Remaining Render time` will display in the render window menu bar an estimation for how much time is left during the rendering of animations
+  - This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability in render time from frame to frame, but can give a general guess as to how long you have left to wait
 
 ## Project Settings
 
@@ -56,6 +58,20 @@ Project settings are found at the bottom of the Render Output panel and are uniq
     - `{camera}` = render camera (independent of selection or active status)
     - `{item}` = active item (if no item is selected or active, this will return "None")
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+    - `{device}` = CPU or GPU device
+      - Workbench and Eevee always use the GPU
+      - Cycles can use either CPU or GPU
+      - Radeon ProRender can use both CPU and GPU simultaneously (multiple GPUs will simply be listed as "GPU")
+    - `{samples}` = number of samples
+      - Workbench will return the type of antialiasing enabled
+      - Eevee will return the total number of samples taken, subsurface scattering samples, and volumetric samples
+      - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples (reflecting the order displayed in the Blender interface)
+      - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold (reflecting the order displayed in the Blender interface)
+    - `{features}` = enabled features or ray recursions
+      - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+      - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
+      - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+      - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
     - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
     - `{date}` = current date in YYYY-MM-DD format
     - `{time}` = current time in HH-MM-SS format (using a 24 hour clock)
