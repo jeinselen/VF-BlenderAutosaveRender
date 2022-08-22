@@ -58,10 +58,11 @@ Project settings are found at the bottom of the Render Output panel and are uniq
     - `{camera}` = render camera (independent of selection or active status)
     - `{item}` = active item (if no item is selected or active, this will return "None")
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+    - `{host}` = name of the computer or host being used for rendering
     - `{device}` = CPU or GPU device
       - Workbench and Eevee always use the GPU
       - Cycles can use either CPU or GPU
-      - Radeon ProRender can use both CPU and GPU simultaneously (multiple GPUs will simply be listed as "GPU")
+      - Radeon ProRender can use both CPU and GPU simultaneously (in the case of multiple GPUs, additional active devices will be added as "+GPU")
     - `{samples}` = number of samples
       - Workbench will return the type of antialiasing enabled
       - Eevee will return the total number of samples taken, subsurface scattering samples, and volumetric samples
@@ -101,7 +102,7 @@ File formats will use whatever compression preferences have been set in the proj
 
 If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
 
-- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{host}` `{device}` `{samples}` `{features}` `{date}` `{time}` `{serial}` `{frame}`
 
 This works well for automatic naming of animations, since the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
@@ -113,7 +114,7 @@ Note that `{rendertime}` is not included because it is still undetermined when B
 
 If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
 
-- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{host}` `{device}` `{samples}` `{features}` `{date}` `{time}` `{serial}` `{frame}`
 
 This supports customisation of both the `Base Path` and each `File Subpath` (image name). There is a limitation however; only one `File Output` node is supported, and it must be named "File Output" (any additional output nodes will be ignored). If multiple output directories are needed, the workaround is to include the folder paths within the specific image output names, not the base path.
 

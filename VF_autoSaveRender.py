@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 8, 3),
+	"version": (1, 8, 5),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -18,8 +18,10 @@ bl_info = {
 # https://github.com/AlreadyLegendary/Render-time-estimator
 # https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
 # https://blender.stackexchange.com/questions/196045/how-to-add-a-button-to-outliner-header-via-python-script
+# https://stackoverflow.com/questions/4271740/how-can-i-use-python-to-get-the-system-hostname
 
 import os
+import platform
 import datetime
 import time
 import bpy
@@ -299,8 +301,8 @@ def auto_save_render_estimate(scene):
 # Variable replacement function for globally accessible variables (serial number must be provided)
 # Excludes {rendertime} as it does not exist at the start of rendering
 
-variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {date} {time} {serial} {frame}'
-variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {rendertime} {date} {time} {serial} {frame}'
+variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {host} {device} {samples} {features} {date} {time} {serial} {frame}'
+variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {host} {device} {samples} {features} {rendertime} {date} {time} {serial} {frame}'
 
 def replaceVariables(string):
 	# Get render engine feature sets
@@ -321,7 +323,7 @@ def replaceVariables(string):
 			engineFeaturesArray.append('SSR')
 		if bpy.context.scene.eevee.use_motion_blur:
 			engineFeaturesArray.append('MB')
-		engineFeatures = 'NONE' if len(engineFeaturesArray) == 0 else '-'.join(engineFeaturesArray)
+		engineFeatures = 'None' if len(engineFeaturesArray) == 0 else '+'.join(engineFeaturesArray)
 
 	elif bpy.context.engine == 'CYCLES':
 		engineDevice = bpy.context.scene.cycles.device
@@ -332,24 +334,21 @@ def replaceVariables(string):
 		engineFeatures = str(bpy.context.scene.cycles.max_bounces) + '-' + str(bpy.context.scene.cycles.diffuse_bounces) + '-' + str(bpy.context.scene.cycles.glossy_bounces) + '-' + str(bpy.context.scene.cycles.transmission_bounces) + '-' + str(bpy.context.scene.cycles.volume_bounces) + '-' + str(bpy.context.scene.cycles.transparent_max_bounces)
 
 	elif bpy.context.engine == 'RPR':
-		# Compile GPU status into single boolean (cycles through list of all connected GPUs, sets boolean to True if any of them are enabled)
-		gpuBoolean = False
+		# Compile array of enabled devices
+		engineDevicesArray = []
+		if bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.cpu_state:
+			engineDevicesArray.append('CPU')
 		for gpu in bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.available_gpu_states:
 			if gpu:
-				gpuBoolean = True
-		# Set render device list (RPR can combine CPU and GPU rendering simultaneously)
-		if bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.cpu_state and not gpuBoolean:
-			engineDevice = 'CPU'
-		elif bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.cpu_state and gpuBoolean:
-			engineDevice = 'CPU+GPU'
-		elif gpuBoolean:
-			engineDevice = 'GPU'
-		else:
-			# This should be an impossible setting (RPR enforces at least one active device)
-			engineDevice = 'NONE'
-		# FEATURE IMPROVEMENT: collect CPU and GPUs into an array and join instead of using compiled booleans (this will allow multiple GPU devices to show up as individual GPUs)
+				engineDevicesArray.append('GPU')
+		engineDevice = 'None' if len(engineDevicesArray) == 0 else '+'.join(engineDevicesArray)
 		engineSamples = str(bpy.context.scene.rpr.limits.min_samples) + '-' + str(bpy.context.scene.rpr.limits.max_samples) + '-' + str(round(bpy.context.scene.rpr.limits.noise_threshold, 4))
 		engineFeatures = str(bpy.context.scene.rpr.max_ray_depth) + '-' + str(bpy.context.scene.rpr.diffuse_depth) + '-' + str(bpy.context.scene.rpr.glossy_depth) + '-' + str(bpy.context.scene.rpr.refraction_depth) + '-' + str(bpy.context.scene.rpr.glossy_refraction_depth) + '-' + str(bpy.context.scene.rpr.shadow_depth)
+
+	else:
+		engineDevice = 'unknown'
+		engineSamples = 'unknown'
+		engineFeatures = 'unknown'
 
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
@@ -358,6 +357,8 @@ def replaceVariables(string):
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
 	string = string.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
+#	string = string.replace("{host}", os.getenv('HOSTNAME', os.getenv('COMPUTERNAME', platform.node())).split('.')[0])
+	string = string.replace("{host}", platform.node().split('.')[0])
 	string = string.replace("{device}", engineDevice)
 	string = string.replace("{samples}", engineSamples)
 	string = string.replace("{features}", engineFeatures)
