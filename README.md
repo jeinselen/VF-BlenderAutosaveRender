@@ -26,6 +26,8 @@ Add-on preferences are found in the Blender Preferences panel Add-on tab, at the
   - The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
     - Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
     - Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default auto save directory (this is specific to MacOS and Linux; backslash would be required in Windows)
+- `Display Estimated Remaining Render time` will display in the render window menu bar an estimation for how much time is left during the rendering of animations
+  - This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability in render time from frame to frame, but can give a general guess as to how long you have left to wait
 
 ## Project Settings
 
@@ -57,6 +59,21 @@ Project settings are found at the bottom of the Render Output panel and are uniq
     - `{camera}` = render camera (independent of selection or active status)
     - `{item}` = active item (if no item is selected or active, this will return "None")
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+    - `{host}` = name of the computer or host being used for rendering
+    - `{device}` = CPU or GPU device
+      - Workbench and Eevee always use the GPU
+      - Cycles can use either CPU or GPU
+      - Radeon ProRender can use both CPU and GPU simultaneously (in the case of multiple GPUs, additional active devices will be added as "+GPU")
+    - `{samples}` = number of samples
+      - Workbench will return the type of antialiasing enabled
+      - Eevee will return the total number of samples taken, subsurface scattering samples, and volumetric samples
+      - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples (reflecting the order displayed in the Blender interface)
+      - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold (reflecting the order displayed in the Blender interface)
+    - `{features}` = enabled features or ray recursions
+      - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+      - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
+      - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+      - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
     - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
     - `{date}` = current date in YYYY-MM-DD format
     - `{time}` = current time in HH-MM-SS format (using a 24 hour clock)
@@ -86,7 +103,7 @@ File formats will use whatever compression preferences have been set in the proj
 
 If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
 
-- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{host}` `{device}` `{samples}` `{features}` `{date}` `{time}` `{serial}` `{frame}`
 
 This works well for automatic naming of animations, since the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
@@ -98,7 +115,7 @@ Note that `{rendertime}` is not included because it is still undetermined when B
 
 If enabled in the add-on preferences, this extends the native Blender output path with almost all of the `Custom String` variables listed above.
 
-- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{date}` `{time}` `{serial}` `{frame}`
+- `{project}` `{scene}` `{collection}` `{camera}` `{item}` `{renderengine}` `{host}` `{device}` `{samples}` `{features}` `{date}` `{time}` `{serial}` `{frame}`
 
 This supports customisation of both the `Base Path` and each `File Subpath` (image name). There is a limitation however; only one `File Output` node is supported, and it must be named "File Output" (any additional output nodes will be ignored). If multiple output directories are needed, the workaround is to include the folder paths within the specific image output names, not the base path.
 
