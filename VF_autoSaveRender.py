@@ -353,7 +353,7 @@ def replaceVariables(string):
 		engineFeatures = 'unknown'
 
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
-	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
+	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0]) if bpy.data.filepath else string.replace("{project}", 'Blender')
 	string = string.replace("{scene}", bpy.context.scene.name)
 	string = string.replace("{collection}", bpy.context.collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
