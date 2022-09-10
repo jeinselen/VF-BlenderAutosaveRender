@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 8, 5),
+	"version": (1, 8, 6),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -301,8 +301,8 @@ def auto_save_render_estimate(scene):
 # Variable replacement function for globally accessible variables (serial number must be provided)
 # Excludes {rendertime} as it does not exist at the start of rendering
 
-variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {host} {device} {samples} {features} {date} {time} {serial} {frame}'
-variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {host} {device} {samples} {features} {rendertime} {date} {time} {serial} {frame}'
+variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {host} {version} {date} {time} {serial} {frame}'
+variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {rendertime} {host} {version} {date} {time} {serial} {frame}'
 
 def replaceVariables(string):
 	# Get render engine feature sets
@@ -351,19 +351,25 @@ def replaceVariables(string):
 		engineFeatures = 'unknown'
 
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
+	# Project variables
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", bpy.context.scene.name)
 	string = string.replace("{collection}", bpy.context.collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
+	# Rendering variables
 	string = string.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
-#	string = string.replace("{host}", os.getenv('HOSTNAME', os.getenv('COMPUTERNAME', platform.node())).split('.')[0])
-	string = string.replace("{host}", platform.node().split('.')[0])
 	string = string.replace("{device}", engineDevice)
 	string = string.replace("{samples}", engineSamples)
 	string = string.replace("{features}", engineFeatures)
+		# {rendertime} is handled elsewhere
+	# System variables
+	string = string.replace("{host}", platform.node().split('.')[0])
+	string = string.replace("{version}", bpy.app.version_string + '-' + bpy.app.version_cycle)
+	# Identifier variables
 	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
 	string = string.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+		# {serial} is handled elsewhere
 	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	return string
 

@@ -51,14 +51,14 @@ Project settings are found at the bottom of the Render Output panel and are uniq
   - When a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
 - `Custom String`
   - This uses pattern replacement to allow for entirely unique file naming patterns
-  - Supported variables:
+  - Project variables:
     - `{project}` = the name of the Blender file
     - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
     - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
     - `{camera}` = render camera (independent of selection or active status)
     - `{item}` = active item (if no item is selected or active, this will return "None")
+  - Rendering variables:
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
-    - `{host}` = name of the computer or host being used for rendering
     - `{device}` = CPU or GPU device
       - Workbench and Eevee always use the GPU
       - Cycles can use either CPU or GPU
@@ -74,6 +74,10 @@ Project settings are found at the bottom of the Render Output panel and are uniq
       - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
       - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
     - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
+  - System variables:
+    - `{host}` = name of the computer or host being used for rendering
+    - `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
+  - Identifier variables:
     - `{date}` = current date in YYYY-MM-DD format
     - `{time}` = current time in HH-MM-SS format (using a 24 hour clock)
     - `{serial}` = automatically incremented serial number padded to 4 digits
