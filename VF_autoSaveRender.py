@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 8, 6),
+	"version": (1, 9, 0),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -19,6 +19,8 @@ bl_info = {
 # https://www.geeksforgeeks.org/python-program-to-convert-seconds-into-hours-minutes-and-seconds/
 # https://blender.stackexchange.com/questions/196045/how-to-add-a-button-to-outliner-header-via-python-script
 # https://stackoverflow.com/questions/4271740/how-can-i-use-python-to-get-the-system-hostname
+# https://s-nako.work/2020/12/how-to-pass-arguments-to-custom-operator-in-blender-python/
+# https://blender.stackexchange.com/questions/233803/call-a-dialog-box-without-ok-confirmation-button
 
 import os
 import platform
@@ -56,6 +58,11 @@ IMAGE_EXTENSIONS = (
 	'hdr',
 	'tif'
 )
+
+variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}",
+				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
+				"title,System,DESKTOP", "{host}", "{version}",
+				"title,Identifiers,COPY_ID", "{date}", "{time}", "{serial}", "{frame}"]
 
 ###########################################################################
 # Auto save render function
@@ -301,9 +308,6 @@ def auto_save_render_estimate(scene):
 # Variable replacement function for globally accessible variables (serial number must be provided)
 # Excludes {rendertime} as it does not exist at the start of rendering
 
-variableList = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {host} {version} {date} {time} {serial} {frame}'
-variableListExpanded = '{project} {scene} {collection} {camera} {item} {renderengine} {device} {samples} {features} {rendertime} {host} {version} {date} {time} {serial} {frame}'
-
 def replaceVariables(string):
 	# Get render engine feature sets
 	if bpy.context.engine == 'BLENDER_WORKBENCH':
@@ -480,7 +484,7 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 		default='SERIAL')
 	file_name_custom: bpy.props.StringProperty(
 		name="Custom String",
-		description="Variables: " + variableListExpanded,
+		description="Format a custom string using the variables listed below",
 		default="{project}-{serial}-{renderengine}-{rendertime}",
 		maxlen=4096)
 	file_name_serial: bpy.props.IntProperty(
@@ -538,55 +542,6 @@ class AutoSaveRenderSettings(bpy.types.PropertyGroup):
 ###########################################################################
 # UI rendering classes
 
-class RENDER_PT_auto_save_render_path(bpy.types.Panel):
-	bl_space_type = 'PROPERTIES'
-	bl_region_type = 'WINDOW'
-	bl_context = "render"
-	bl_label = "Output Path Variables"
-	bl_parent_id = "RENDER_PT_output"
-	bl_options = {'HIDE_HEADER'}
-
-	# def draw_header(self, context):
-		# self.layout.prop(bpy.context.scene.render, 'use_border', text='')
-
-	def draw(self, context):
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
-			layout = self.layout
-			layout.use_property_decorate = False  # No animation
-			layout.use_property_split = True
-			if '{serial}' in bpy.context.scene.render.filepath:
-				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
-			box = layout.box()
-			box.label(text="Variables: "+ variableList)
-
-class RENDER_PT_auto_save_render_node(bpy.types.Panel):
-	bl_space_type = 'NODE_EDITOR'
-	bl_region_type = 'UI'
-	bl_category = "Node"
-	bl_label = "Output Path Variables"
-	bl_parent_id = "NODE_PT_active_node_properties"
-	bl_options = {'HIDE_HEADER'}
-
-	# def draw_header(self, context):
-		# self.layout.prop(bpy.context.scene.render, 'use_border', text='')
-
-	def draw(self, context):
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.active_node.bl_idname == 'CompositorNodeOutputFile' and bpy.context.active_node.name == 'File Output':
-			layout = self.layout
-			layout.use_property_decorate = False  # No animation
-			layout.use_property_split = True
-
-			# Get file path and all output file names from the primary node
-			paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
-			for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
-				paths.append(slot.path)
-			paths = ''.join(paths)
-
-			if '{serial}' in paths:
-				layout.prop(context.scene.auto_save_render_settings, 'output_file_serial')
-			box = layout.box()
-			box.label(text="Variables: "+ variableList)
-
 class RENDER_PT_auto_save_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
@@ -611,9 +566,6 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 		layout.use_property_split = True
 		layout.prop(context.scene.auto_save_render_settings, 'file_name_type', icon='FILE_TEXT')
 		if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-			# this is a semi-hacky way to override the initial custom string with a global preset instead of relying on get/set
-			# if '{unset}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
-				# bpy.context.scene.auto_save_render_settings.file_name_custom = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.default_file_name_custom
 			layout.use_property_split = True
 			layout.prop(context.scene.auto_save_render_settings, 'file_name_custom')
 			if '{serial}' in bpy.context.scene.auto_save_render_settings.file_name_custom:
@@ -627,10 +579,19 @@ class RENDER_PT_auto_save_render(bpy.types.Panel):
 			error.label(text="Result: single layer EXR file will be saved instead")
 		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time or bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
 			box = layout.box()
-			if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
-				box.label(text="Variables: " + variableListExpanded)
 			if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
 				box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.auto_save_render_settings.total_render_time))
+			if bpy.context.scene.auto_save_render_settings.file_name_type == 'CUSTOM':
+				grid = box.grid_flow(columns=4, even_columns=True, even_rows=False)
+				for item in variableArray:
+					# Display headers
+					if item.startswith("title,"):
+						x = item.split(",")
+						col = grid.column(align=True)
+						col.label(text = x[1], icon = x[2])
+					# Display list elements
+					else:
+						col.label(text = item)
 
 # Time estimate display within the Image viewer
 def estimated_render_time(self, context):
@@ -639,10 +600,76 @@ def estimated_render_time(self, context):
 		box = self.layout.box()
 		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.auto_save_render_settings.estimated_render_time_value + "")
 
-classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render_path, RENDER_PT_auto_save_render_node, RENDER_PT_auto_save_render)
+###########################################################################
+# Variable info popup
+
+# bpy.context.window_manager.clipboard = "test"
+
+class AutoSaveRenderVariablePopup(bpy.types.Operator):
+	"""List of the available variables"""
+	bl_label = "Variable List"
+	bl_idname = "vf.auto_save_render_variable_popup"
+	bl_options = {'REGISTER', 'INTERNAL'}
+
+	rendertime: bpy.props.BoolProperty()
+
+	@classmethod
+	def poll(cls, context):
+		return True
+
+	def execute(self, context):
+		self.report({'INFO'}, "YES")
+		return {'FINISHED'}
+
+	def invoke(self, context, event):
+		return context.window_manager.invoke_popup(self, width=400)
+
+	def draw(self, context):
+		layout = self.layout
+		grid = self.layout.grid_flow(columns=4, even_columns=True, even_rows=False)
+		for item in variableArray:
+			# Display headers
+			if item.startswith("title,"):
+				x = item.split(",")
+				col = grid.column()
+#				col.alignment = "LEFT"
+				col.label(text = x[1], icon = x[2])
+			# Display list elements
+			elif item != "{rendertime}" or self.rendertime:
+#				col.alignment = "RIGHT"
+				col.label(text = item)
+
+def RENDER_PT_output_path_variable_list(self, context):
+	if not (False):
+		layout = self.layout
+		layout.use_property_decorate = False  # No animation
+		layout.use_property_split = True
+		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+			row = layout.row()
+			if '{serial}' in bpy.context.scene.render.filepath:
+				row.prop(context.scene.auto_save_render_settings, 'output_file_serial')
+				row.scale_x = 1.0
+			else:
+				row.label(text="")
+				row.scale_x = 1.5
+			ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+			ops.rendertime = False
+
+def NODE_PT_output_path_variable_list(self, context):
+	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node:
+		layout = self.layout
+		layout.use_property_decorate = False  # No animation
+		layout.use_property_split = True
+		row = layout.row()
+		row.label(text="")
+		row.scale_x = 1.5
+		ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
+		ops.rendertime = False
 
 ###########################################################################
 # Addon registration functions
+
+classes = (AutoSaveRenderPreferences, AutoSaveRenderSettings, RENDER_PT_auto_save_render, AutoSaveRenderVariablePopup)
 
 def register():
 	for cls in classes:
@@ -659,6 +686,9 @@ def register():
 	bpy.app.handlers.render_complete.append(auto_save_render)
 	# Render estimate display
 	bpy.types.IMAGE_MT_editor_menus.append(estimated_render_time)
+	# Variable info popup
+	bpy.types.RENDER_PT_output.prepend(RENDER_PT_output_path_variable_list)
+	bpy.types.NODE_PT_active_node_properties.prepend(NODE_PT_output_path_variable_list)
 
 def unregister():
 	for cls in reversed(classes):
@@ -675,6 +705,9 @@ def unregister():
 	bpy.app.handlers.render_complete.remove(auto_save_render)
 	# Render estimate display
 	bpy.types.IMAGE_MT_editor_menus.remove(estimated_render_time)
+	# Variable info popup
+	bpy.types.RENDER_PT_output.remove(RENDER_PT_output_path_variable_list)
+	bpy.types.NODE_PT_active_node_properties.remove(NODE_PT_output_path_variable_list)
 
 if __name__ == "__main__":
 	register()
