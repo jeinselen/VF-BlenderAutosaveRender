@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 9, 1),
+	"version": (1, 9, 2),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -61,7 +61,7 @@ IMAGE_EXTENSIONS = (
 
 variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
-				"title,System,DESKTOP", "{host}", "{version}",
+				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
 				"title,Identifiers,COPY_ID", "{date}", "{time}", "{serial}", "{frame}"]
 
 ###########################################################################
@@ -369,6 +369,7 @@ def replaceVariables(string):
 		# {rendertime} is handled elsewhere
 	# System variables
 	string = string.replace("{host}", platform.node().split('.')[0])
+	string = string.replace("{platform}", platform.platform())
 	string = string.replace("{version}", bpy.app.version_string + '-' + bpy.app.version_cycle)
 	# Identifier variables
 	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
