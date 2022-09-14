@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 9, 0),
+	"version": (1, 9, 1),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -632,39 +632,48 @@ class AutoSaveRenderVariablePopup(bpy.types.Operator):
 			if item.startswith("title,"):
 				x = item.split(",")
 				col = grid.column()
-#				col.alignment = "LEFT"
 				col.label(text = x[1], icon = x[2])
 			# Display list elements
 			elif item != "{rendertime}" or self.rendertime:
-#				col.alignment = "RIGHT"
 				col.label(text = item)
 
 def RENDER_PT_output_path_variable_list(self, context):
-	if not (False):
+	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
 		layout = self.layout
-		layout.use_property_decorate = False  # No animation
+		layout.use_property_decorate = False
 		layout.use_property_split = True
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
-			row = layout.row()
-			if '{serial}' in bpy.context.scene.render.filepath:
-				row.prop(context.scene.auto_save_render_settings, 'output_file_serial')
-				row.scale_x = 1.0
-			else:
-				row.label(text="")
-				row.scale_x = 1.5
-			ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-			ops.rendertime = False
+		row = layout.row()
+		if '{serial}' in bpy.context.scene.render.filepath:
+			row.prop(context.scene.auto_save_render_settings, 'output_file_serial')
+			row.scale_x = 1.0
+		else:
+			row.label(text="")
+			row.scale_x = 1.5
+		ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
+		ops.rendertime = False
 
 def NODE_PT_output_path_variable_list(self, context):
 	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node:
+		# Get file path and all output file names from the primary node
+		paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
+		for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
+			paths.append(slot.path)
+		paths = ''.join(paths)
+
+		# UI layout
 		layout = self.layout
-		layout.use_property_decorate = False  # No animation
+		layout.use_property_decorate = False
 		layout.use_property_split = True
 		row = layout.row()
-		row.label(text="")
-		row.scale_x = 1.5
-		ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
+		if '{serial}' in paths:
+			row.prop(context.scene.auto_save_render_settings, 'output_file_serial')
+			row.scale_x = 1.0
+		else:
+			row.label(text="")
+			row.scale_x = 1.5
+		ops = row.operator(AutoSaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
 		ops.rendertime = False
+		layout.use_property_split = False # Base path interface doesn't specify false, it assumes it, so the UI gets screwed up if we don't reset here
 
 ###########################################################################
 # Addon registration functions
