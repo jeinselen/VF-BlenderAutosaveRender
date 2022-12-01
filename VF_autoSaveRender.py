@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Auto Save Render",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (1, 9, 2),
+	"version": (1, 9, 3),
 	"blender": (3, 2, 0),
 	"location": "Rendertab > Output Panel > Subpanel",
 	"description": "Automatically saves rendered images with custom naming convention",
@@ -157,7 +157,7 @@ def auto_save_render(scene):
 	else:
 		# Load custom file name and process elements that aren't available in the global variable replacement
 		filename = bpy.context.scene.auto_save_render_settings.file_name_custom
-		filename = filename.replace("{rendertime}", str(render_time))
+		filename = filename.replace("{rendertime}", str(render_time) + 's')
 		# Remember that auto save serial number is separate from the project serial number, which is handled in the global variable function
 		if '{serial}' in filename:
 			filename = filename.replace("{serial}", format(bpy.context.scene.auto_save_render_settings.file_name_serial, '04'))
@@ -311,48 +311,78 @@ def auto_save_render_estimate(scene):
 def replaceVariables(string):
 	# Get render engine feature sets
 	if bpy.context.engine == 'BLENDER_WORKBENCH':
-		engineDevice = 'GPU'
-		engineSamples = bpy.context.scene.display.render_aa
-		engineFeatures = bpy.context.scene.display.shading.light
+		renderEngine = 'Workbench'
+		renderDevice = 'GPU'
+		renderSamples = bpy.context.scene.display.render_aa
+		renderFeatures = bpy.context.scene.display.shading.light.title().replace("Matcap", "MatCap") + '-' + bpy.context.scene.display.shading.color_type.title()
 
 	elif bpy.context.engine == 'BLENDER_EEVEE':
-		engineDevice = 'GPU'
-		engineSamples = str(bpy.context.scene.eevee.taa_render_samples) + '-' + str(bpy.context.scene.eevee.sss_samples) + '-' + str(bpy.context.scene.eevee.volumetric_samples)
-		engineFeaturesArray = []
+		renderEngine = 'Eevee'
+		renderDevice = 'GPU'
+		renderSamples = str(bpy.context.scene.eevee.taa_render_samples) + '-' + str(bpy.context.scene.eevee.sss_samples) + '-' + str(bpy.context.scene.eevee.volumetric_samples)
+		renderFeaturesArray = []
 		if bpy.context.scene.eevee.use_gtao:
-			engineFeaturesArray.append('AO')
+			renderFeaturesArray.append('AO')
 		if bpy.context.scene.eevee.use_bloom:
-			engineFeaturesArray.append('Bloom')
+			renderFeaturesArray.append('Bloom')
 		if bpy.context.scene.eevee.use_ssr:
-			engineFeaturesArray.append('SSR')
+			renderFeaturesArray.append('SSR')
 		if bpy.context.scene.eevee.use_motion_blur:
-			engineFeaturesArray.append('MB')
-		engineFeatures = 'None' if len(engineFeaturesArray) == 0 else '+'.join(engineFeaturesArray)
+			renderFeaturesArray.append('MB')
+		renderFeatures = 'None' if len(renderFeaturesArray) == 0 else '+'.join(renderFeaturesArray)
 
 	elif bpy.context.engine == 'CYCLES':
-		engineDevice = bpy.context.scene.cycles.device
+		renderEngine = 'Cycles'
+		renderDevice = bpy.context.scene.cycles.device
 		# Add compute device type if GPU is enabled
-		# if engineDevice == "GPU":
-			# engineDevice += '_' + bpy.context.preferences.addons["cycles"].preferences.compute_device_type
-		engineSamples = str(round(bpy.context.scene.cycles.adaptive_threshold, 4)) + '-' + str(bpy.context.scene.cycles.samples) + '-' + str(bpy.context.scene.cycles.adaptive_min_samples)
-		engineFeatures = str(bpy.context.scene.cycles.max_bounces) + '-' + str(bpy.context.scene.cycles.diffuse_bounces) + '-' + str(bpy.context.scene.cycles.glossy_bounces) + '-' + str(bpy.context.scene.cycles.transmission_bounces) + '-' + str(bpy.context.scene.cycles.volume_bounces) + '-' + str(bpy.context.scene.cycles.transparent_max_bounces)
+		# if renderDevice == "GPU":
+			# renderDevice += '_' + bpy.context.preferences.addons["cycles"].preferences.compute_device_type
+		renderSamples = str(round(bpy.context.scene.cycles.adaptive_threshold, 4)) + '-' + str(bpy.context.scene.cycles.samples) + '-' + str(bpy.context.scene.cycles.adaptive_min_samples)
+		renderFeatures = str(bpy.context.scene.cycles.max_bounces) + '-' + str(bpy.context.scene.cycles.diffuse_bounces) + '-' + str(bpy.context.scene.cycles.glossy_bounces) + '-' + str(bpy.context.scene.cycles.transmission_bounces) + '-' + str(bpy.context.scene.cycles.volume_bounces) + '-' + str(bpy.context.scene.cycles.transparent_max_bounces)
 
 	elif bpy.context.engine == 'RPR':
+		renderEngine = 'ProRender'
 		# Compile array of enabled devices
-		engineDevicesArray = []
+		renderDevicesArray = []
 		if bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.cpu_state:
-			engineDevicesArray.append('CPU')
+			renderDevicesArray.append('CPU')
 		for gpu in bpy.context.preferences.addons["rprblender"].preferences.settings.final_devices.available_gpu_states:
 			if gpu:
-				engineDevicesArray.append('GPU')
-		engineDevice = 'None' if len(engineDevicesArray) == 0 else '+'.join(engineDevicesArray)
-		engineSamples = str(bpy.context.scene.rpr.limits.min_samples) + '-' + str(bpy.context.scene.rpr.limits.max_samples) + '-' + str(round(bpy.context.scene.rpr.limits.noise_threshold, 4))
-		engineFeatures = str(bpy.context.scene.rpr.max_ray_depth) + '-' + str(bpy.context.scene.rpr.diffuse_depth) + '-' + str(bpy.context.scene.rpr.glossy_depth) + '-' + str(bpy.context.scene.rpr.refraction_depth) + '-' + str(bpy.context.scene.rpr.glossy_refraction_depth) + '-' + str(bpy.context.scene.rpr.shadow_depth)
+				renderDevicesArray.append('GPU')
+		renderDevice = 'None' if len(renderDevicesArray) == 0 else '+'.join(renderDevicesArray)
+		renderSamples = str(bpy.context.scene.rpr.limits.min_samples) + '-' + str(bpy.context.scene.rpr.limits.max_samples) + '-' + str(round(bpy.context.scene.rpr.limits.noise_threshold, 4))
+		renderFeatures = str(bpy.context.scene.rpr.max_ray_depth) + '-' + str(bpy.context.scene.rpr.diffuse_depth) + '-' + str(bpy.context.scene.rpr.glossy_depth) + '-' + str(bpy.context.scene.rpr.refraction_depth) + '-' + str(bpy.context.scene.rpr.glossy_refraction_depth) + '-' + str(bpy.context.scene.rpr.shadow_depth)
+
+	elif bpy.context.engine == 'LUXCORE':
+		renderEngine = 'LuxCore'
+		renderDevice = 'CPU' if bpy.context.scene.luxcore.config.device == 'CPU' else 'GPU'
+		# Samples returns the halt conditions for time, samples, and/or noise threshold
+		renderSamples = ''
+		if bpy.context.scene.luxcore.halt.use_time:
+			renderSamples += str(bpy.context.scene.luxcore.halt.time) + 's'
+		if bpy.context.scene.luxcore.halt.use_samples:
+			if len(renderSamples) > 0:
+				renderSamples += '-'
+			renderSamples += str(bpy.context.scene.luxcore.halt.samples)
+		if bpy.context.scene.luxcore.halt.use_noise_thresh:
+			if len(renderSamples) > 0:
+				renderSamples += '-'
+			renderSamples += str(bpy.context.scene.luxcore.halt.noise_thresh) + '-' + str(bpy.context.scene.luxcore.halt.noise_thresh_warmup) + '-' + str(bpy.context.scene.luxcore.halt.noise_thresh_step)
+		# Features include the number of paths or bounces (depending on engine selected) and denoising if enabled
+		if bpy.context.scene.luxcore.config.engine == 'PATH':
+			renderEngine += '-Path'
+			renderFeatures = str(bpy.context.scene.luxcore.config.path.depth_total) + '-' + str(bpy.context.scene.luxcore.config.path.depth_diffuse) + '-' + str(bpy.context.scene.luxcore.config.path.depth_glossy) + '-' + str(bpy.context.scene.luxcore.config.path.depth_specular)
+		else:
+			renderEngine += '-Bidir'
+			renderFeatures = str(bpy.context.scene.luxcore.config.bidir_path_maxdepth) + '-' + str(bpy.context.scene.luxcore.config.bidir_light_maxdepth)
+		if bpy.context.scene.luxcore.denoiser.enabled:
+			renderFeatures += '-' + str(bpy.context.scene.luxcore.denoiser.type)
 
 	else:
-		engineDevice = 'unknown'
-		engineSamples = 'unknown'
-		engineFeatures = 'unknown'
+		renderEngine = bpy.context.engine
+		renderDevice = 'unknown'
+		renderSamples = 'unknown'
+		renderFeatures = 'unknown'
 
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found (unusable behaviour in this situation)
 	# Project variables
@@ -362,10 +392,10 @@ def replaceVariables(string):
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
 	# Rendering variables
-	string = string.replace("{renderengine}", bpy.context.engine.replace('BLENDER_', ''))
-	string = string.replace("{device}", engineDevice)
-	string = string.replace("{samples}", engineSamples)
-	string = string.replace("{features}", engineFeatures)
+	string = string.replace("{renderengine}", renderEngine)
+	string = string.replace("{device}", renderDevice)
+	string = string.replace("{samples}", renderSamples)
+	string = string.replace("{features}", renderFeatures)
 		# {rendertime} is handled elsewhere
 	# System variables
 	string = string.replace("{host}", platform.node().split('.')[0])

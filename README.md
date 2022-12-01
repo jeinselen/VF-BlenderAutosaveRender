@@ -57,18 +57,22 @@ Project settings are found at the bottom of the Render Output panel and are uniq
     - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
     - `{device}` = CPU or GPU device
       - Workbench and Eevee always use the GPU
-      - Cycles can use either CPU or GPU
-      - Radeon ProRender can use both CPU and GPU simultaneously (in the case of multiple GPUs, additional active devices will be added as "+GPU")
+      - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
+      - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
+      - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
     - `{samples}` = number of samples
       - Workbench will return the type of antialiasing enabled
-      - Eevee will return the total number of samples taken, subsurface scattering samples, and volumetric samples
-      - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples (reflecting the order displayed in the Blender interface)
-      - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold (reflecting the order displayed in the Blender interface)
+      - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
+      - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
+      - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
+      - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
+      - All outputs reflect the order displayed in the Blender interface
     - `{features}` = enabled features or ray recursions
       - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
       - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
       - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
       - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
+      - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
     - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
     3. **System variables**
     - `{host}` = name of the computer or host being used for rendering
