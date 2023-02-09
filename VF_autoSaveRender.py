@@ -1,9 +1,9 @@
 bl_info = {
-	"name": "VF Autosave Render + Variables",
+	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 0),
+	"version": (2, 0, 1),
 	"blender": (3, 2, 0),
-	"location": "Output Properties > Output > Autosave Render",
+	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
 	"warning": "inexperienced developer, use at your own risk",
 	"wiki_url": "",
@@ -67,7 +67,7 @@ def autosave_render_start(scene):
 	serialUsed = False
 	
 	# Filter output file path if enabled
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
 		# Save original file path
 		bpy.context.scene.autosave_render_settings.output_file_path = filepath = scene.render.filepath
 		
@@ -81,7 +81,7 @@ def autosave_render_start(scene):
 		
 	# Filter compositing node file path if enabled
 	# Trusting the short-circuit boolean expression ("not technically lazy") evaluation in Python means this lengthy series of ANDs doesn't run into any issues at the end if the node doesn't exist
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
 		# Get file path
 		# filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
 		
@@ -155,11 +155,11 @@ def autosave_render(scene):
 	bpy.context.scene.autosave_render_settings.total_render_time = bpy.context.scene.autosave_render_settings.total_render_time + render_time
 
 	# Restore unprocessed file path if processing is enabled
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
 		scene.render.filepath = bpy.context.scene.autosave_render_settings.output_file_path
 
 	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.autosave_render_settings.output_file_node:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.autosave_render_settings.output_file_node:
 		# bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.autosave_render_settings.output_file_node
 		paths = bpy.context.scene.autosave_render_settings.output_file_node
 		# Split the saved string back into individual pieces
@@ -263,9 +263,9 @@ def autosave_render(scene):
 	scene.render.image_settings.color_depth = original_colordepth
 
 	# Save external log file
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
 		# Log file settings
-		logname = bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_log_name
+		logname = bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_log_name
 		logname = logname.replace("{project}", projectname)
 		logpath = os.path.join(os.path.dirname(bpy.data.filepath), logname) # Limited to locations local to the project file
 		logtitle = 'Total Render Time: '
@@ -423,7 +423,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
 		default=True)
 	filter_output_file_node: bpy.props.BoolProperty(
-		name='"File Output" Compositing Node',
+		name='File Output Node Variables',
 		description='Implements most of the same keywords used in the custom naming scheme in a Compositing tab "File Output" node',
 		default=True)
 	remaining_render_time: bpy.props.BoolProperty(
@@ -446,11 +446,11 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	
 	# Override individual project autosave location and file name settings
 	file_location_override: bpy.props.BoolProperty(
-		name="Autosave Location",
+		name="File Location",
 		description='Global override for the per-project directory setting',
 		default=False)
 	file_location_global: bpy.props.StringProperty(
-		name="Global Autosave Location",
+		name="Global File Location",
 		description="Leave a single forward slash to auto generate folders alongside project files",
 		default="/",
 		maxlen=4096,
@@ -461,7 +461,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description='Global override for the per-project autosave file name setting',
 		default=False)
 	file_name_type_global: bpy.props.EnumProperty(
-		name='File Name',
+		name='Global File Name',
 		description='Autosaves files with the project name and serial number, project name and date, or custom naming pattern',
 		items=[
 			('SERIAL', 'Project Name + Serial Number', 'Save files with a sequential serial number'),
@@ -504,19 +504,21 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		grid0.prop(self, "filter_output_file_node")
 		
 	# Render Time:
+		layout.separator()
+#		layout.label(text="")
 		layout.label(text="Render Time:")
 		
 		grid1 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid1.prop(self, "show_total_render_time")
 		input = grid1.row()
-		if not bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_total_render_time:
 			input.active = False
 			input.enabled = False
 		input.prop(context.scene.autosave_render_settings, 'total_render_time')
 		
 		grid1.prop(self, "external_render_time")
 		input1 = grid1.row()
-		if not bpy.context.preferences.addons['VF_autoSaveRender'].preferences.external_render_time:
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
 			input1.active = False
 			input1.enabled = False
 		input1.prop(self, "external_log_name", text='')
@@ -524,12 +526,24 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		grid1.prop(self, "remaining_render_time")
 		
 	# Global Overrides:
+		layout.separator()
+#		layout.label(text="")
 		layout.label(text="Global Autosave Overrides:")
 		
+		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
 		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		grid2.prop(self, "file_location_override")
-		input = grid2.row()
-		if not bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_location_override:
+		grid2.separator()
+		if not ((bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM' and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global) or (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global)):
+			grid2.active = False
+			grid2.enabled = False
+		grid2.prop(self, "file_serial_global", text="")
+		
+		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		toggle = grid2.column(align=True)
+		toggle.prop(self, "file_location_override")
+		input = grid2.column(align=True)
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
 			input.active = False
 			input.enabled = False
 		input.prop(self, "file_location_global", text='')
@@ -537,26 +551,25 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		toggle = grid2.column()
 		toggle.prop(self, "file_name_override")
-		input = grid2.column()
-		if not bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_name_override:
-			input.active = False
-			input.enabled = False
-		input.prop(self, "file_name_type_global", text='')
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_name_override and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_name_type_global == 'CUSTOM':
-#			input.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF", rendertime=True)
-			ops = input.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-			ops.rendertime = True
+		col = grid2.column()
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
+			col.active = False
+			col.enabled = False
+		input = col.row()
+		input.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
+		input = col.row()
+		if (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM'):
+#			input.active = False
+#			input.enabled = False
 			input.prop(self, "file_name_custom_global", text='')
-			if '{serial}' in bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_name_custom_global:
-				input.prop(self, "file_serial_global", text="")
 		
 		grid2.prop(self, "file_format_override")
-		input = grid2.row()
-		if not bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_format_override:
+		input = grid2.column()
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
 			input.active = False
 			input.enabled = False
-		input.prop(self, "file_format_global", text='')
-		if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_format_override and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
+		input.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
 			error = layout.box()
 			error.label(text="Python API can only save single layer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
@@ -570,7 +583,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		description="Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
 		default=True)
 	file_location: bpy.props.StringProperty(
-		name="Autosave Location",
+		name="File Location",
 		description="Leave a single forward slash to auto generate folders alongside project files",
 		default="/",
 		maxlen=4096,
@@ -651,68 +664,82 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 	bl_label = "Autosave Render"
 	bl_parent_id = "RENDER_PT_output"
 	# bl_options = {'DEFAULT_CLOSED'}
-
+	
 	# Check for engine compatibility
 	# compatible_render_engines = {'BLENDER_RENDER', 'BLENDER_OPENGL', 'BLENDER_WORKBENCH', 'BLENDER_EEVEE', 'CYCLES', 'RPR', 'LUXCORE'}
 	# @classmethod
 	# def poll(cls, context):
 		# return (context.engine in cls.compatible_render_engines)
-
+	
 	def draw_header(self, context):
 		self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_render', text='')
-
+	
 	def draw(self, context):
 		layout = self.layout
 		layout.use_property_decorate = False  # No animation
-		layout.prop(context.scene.autosave_render_settings, 'file_location', text='')
 		layout.use_property_split = True
 		
-		layout.prop(context.scene.autosave_render_settings, 'file_name_type', icon='FILE_TEXT')
-		if bpy.context.scene.autosave_render_settings.file_name_type == 'CUSTOM':
-#			layout.use_property_split = True
-			# This is one of the stupidest layouts I've ever had to do and I hate it
-			row = layout.row()
-			col = row.column()
-			col.label(text="")
-			col = row.column()
-			col.scale_x = 1.225
-			ops = col.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-			ops.rendertime = True
-			# End stupid layout section needed to get a SINGLE BUTTON matching the split everything else is doing
-			# It's so stupid, I can't even use the same code I used elsewhere to solve the exact same issue!
-			layout.prop(context.scene.autosave_render_settings, 'file_name_custom')
-			if '{serial}' in bpy.context.scene.autosave_render_settings.file_name_custom:
-				layout.use_property_split = True
-				layout.prop(context.scene.autosave_render_settings, 'file_serial')
-			# Display available variables
-
-		layout.prop(context.scene.autosave_render_settings, 'file_format', icon='FILE_IMAGE')
-		if bpy.context.scene.autosave_render_settings.file_format == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
+		# Disable inputs if Autosave is disabled
+		if not bpy.context.scene.autosave_render_settings.enable_autosave_render:
+			layout.active = False
+			layout.enabled = False
+		
+		# Variable list popup button
+		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
+		
+		# Local project serial number
+		# Global serial number is listed inline with the path or file override, if used
+		input = layout.row()
+		input.use_property_split = True
+		if not (('{serial}' in bpy.context.scene.autosave_render_settings.file_location and not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override) or (bpy.context.scene.autosave_render_settings.file_name_type == 'CUSTOM' and '{serial}' in bpy.context.scene.autosave_render_settings.file_name_custom and not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override)):
+			input.active = False
+			input.enabled = False
+		input.prop(context.scene.autosave_render_settings, 'file_serial')
+		
+		# File location with global override
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
+			override = layout.row()
+			override.use_property_split = True
+			override.active = False
+			override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, 'file_location_global')
+			if '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global:
+				override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, "file_serial_global", text="")
+		else:
+			layout.use_property_split = False
+			layout.prop(context.scene.autosave_render_settings, 'file_location', text="")
+			layout.use_property_split = True
+		
+		# File name with global override
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
+			override = layout.row()
+			override.active = False
+			override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, 'file_name_type_global', icon='FILE_TEXT')
+			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM':
+				override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, "file_name_custom_global", text='')
+				if '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global:
+					override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, "file_serial_global", text="")
+		else:
+			layout.prop(context.scene.autosave_render_settings, 'file_name_type', icon='FILE_TEXT')
+			if bpy.context.scene.autosave_render_settings.file_name_type == 'CUSTOM':
+				layout.prop(context.scene.autosave_render_settings, 'file_name_custom')
+		
+		# File format with global override
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
+			override = layout.row()
+			override.active = False
+			override.prop(bpy.context.preferences.addons['VF_autosaveRender'].preferences, 'file_format_global', icon='FILE_IMAGE')
+		else:
+			layout.prop(context.scene.autosave_render_settings, 'file_format', icon='FILE_IMAGE')
+			
+		# Multilayer EXR warning
+		if bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER' and (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global == 'SCENE' and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override or bpy.context.scene.autosave_render_settings.file_format == 'SCENE' and not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override):
 			error = layout.box()
 			error.label(text="Python API can only save single layer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
 
 ###########################################################################
-# Display render time in the Render panel
-						
-def RENDER_PT_total_render_time_display(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.show_total_render_time:
-		layout = self.layout
-#		layout.use_property_decorate = False
-#		layout.use_property_split = True
-		box = layout.box()
-		box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.autosave_render_settings.total_render_time))
-
-###########################################################################
-# Display estimated render time remaining in the Image viewer
-def estimated_render_time(self, context):
-	if bpy.context.preferences.addons['VF_autoSaveRender'].preferences.remaining_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
-		self.layout.separator()
-		box = self.layout.box()
-		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.autosave_render_settings.estimated_render_time_value + "")
-
-###########################################################################
-# Variable info popup
+# Variable info popup and serial number UI
 
 # bpy.context.window_manager.clipboard = "test"
 
@@ -749,42 +776,59 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 				col.label(text = item)
 
 def RENDER_PT_output_path_variable_list(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_path:
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
+		# UI layout for Scene Output
 		layout = self.layout
+		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
+		ops.rendertime = False
 		layout.use_property_decorate = False
 		layout.use_property_split = True
-		row = layout.row()
-		if '{serial}' in bpy.context.scene.render.filepath:
-			row.prop(context.scene.autosave_render_settings, 'output_file_serial')
-			row.scale_x = 1.0
-		else:
-			row.label(text="")
-			row.scale_x = 1.5
-		ops = row.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
-		ops.rendertime = False
+		input = layout.row()
+		if not '{serial}' in bpy.context.scene.render.filepath:
+			input.active = False
+			input.enabled = False
+		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
 
 def NODE_PT_output_path_variable_list(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autoSaveRender'].preferences.filter_output_file_node:
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node:
 		# Get file path and all output file names from the primary node
 		paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
 		for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
 			paths.append(slot.path)
 		paths = ''.join(paths)
-
-		# UI layout
+		
+		# UI layout for Node Properties
 		layout = self.layout
 		layout.use_property_decorate = False
 		layout.use_property_split = True
-		row = layout.row()
-		if '{serial}' in paths:
-			row.prop(context.scene.autosave_render_settings, 'output_file_serial')
-			row.scale_x = 1.0
-		else:
-			row.label(text="")
-			row.scale_x = 1.5
-		ops = row.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
 		ops.rendertime = False
+		input = layout.row()
+		if not '{serial}' in paths:
+			input.active = False
+			input.enabled = False
+		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
 		layout.use_property_split = False # Base path interface doesn't specify false, it assumes it, so the UI gets screwed up if we don't reset here
+
+###########################################################################
+# Display render time in the Render panel
+		
+def RENDER_PT_total_render_time_display(self, context):
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_total_render_time:
+		layout = self.layout
+#		layout.use_property_decorate = False
+#		layout.use_property_split = True
+		box = layout.box()
+		box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.autosave_render_settings.total_render_time))
+
+###########################################################################
+# Display estimated render time remaining in the Image viewer
+		
+def estimated_render_time(self, context):
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.remaining_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
+		self.layout.separator()
+		box = self.layout.box()
+		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.autosave_render_settings.estimated_render_time_value + "")
 
 ###########################################################################
 # Addon registration functions
