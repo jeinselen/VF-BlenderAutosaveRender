@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 2),
+	"version": (2, 0, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -171,7 +171,7 @@ def autosave_render(scene):
 		for num, slot in enumerate(bpy.context.scene.node_tree.nodes["File Output"].file_slots):
 			slot.path = slotpaths[num]
 
-	# Stop here if the auto output is disabled
+	# Stop here if autosave output is disabled (side effect: render log is also prevented)
 	if not bpy.context.scene.autosave_render_settings.enable_autosave_render or not bpy.data.filepath:
 		return {'CANCELLED'}
 
@@ -180,16 +180,21 @@ def autosave_render(scene):
 	original_colormode = scene.render.image_settings.color_mode
 	original_colordepth = scene.render.image_settings.color_depth
 
-	# Set up render output formatting
-	if bpy.context.scene.autosave_render_settings.file_format == 'SCENE':
+	# Set up render output formatting with override
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
+		file_format = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global
+	else:
+		file_format = bpy.context.scene.autosave_render_settings.file_format
+	
+	if file_format == 'SCENE':
 		if original_format not in IMAGE_FORMATS:
 			print('VF Autosave Render: {} is not an image format. Image not saved.'.format(original_format))
-			return
-	elif bpy.context.scene.autosave_render_settings.file_format == 'JPEG':
+			return {'ERROR'}
+	elif file_format == 'JPEG':
 		scene.render.image_settings.file_format = 'JPEG'
-	elif bpy.context.scene.autosave_render_settings.file_format == 'PNG':
+	elif file_format == 'PNG':
 		scene.render.image_settings.file_format = 'PNG'
-	elif bpy.context.scene.autosave_render_settings.file_format == 'OPEN_EXR':
+	elif file_format == 'OPEN_EXR':
 		scene.render.image_settings.file_format = 'OPEN_EXR'
 	extension = scene.render.file_extension
 
@@ -205,7 +210,28 @@ def autosave_render(scene):
 	# If the file path contains one or fewer characters, replace it with the project path
 	if len(filepath) <= 1:
 		filepath = os.path.join(os.path.dirname(bpy.data.filepath), projectname)
-
+	
+	# Process elements that aren't available in the global variable replacement
+	# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
+	serialUsedGlobal = False
+	serialUsed = False
+	
+	filepath = filepath.replace("{rendertime}", str(render_time) + 's')
+	if '{serial}' in filepath:
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
+			filepath = filepath.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
+			serialUsedGlobal = True
+		else:
+			filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+			serialUsed = True
+	
+	# Replace global variables in the output name string
+	filepath = replaceVariables(filepath)
+	
+	# Create the project subfolder if it doesn't already exist (otherwise subsequent operations will fail)
+	if not os.path.exists(filepath):
+		os.makedirs(filepath)
+	
 	# Get file name type with override
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
 		file_name_type = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global
@@ -219,6 +245,7 @@ def autosave_render(scene):
 		files = [f for f in os.listdir(filepath)
 				if f.startswith(projectname)
 				and f.lower().endswith(IMAGE_EXTENSIONS)]
+		
 		# Searches the file collection and returns the next highest number as a 4 digit string
 		def save_number_from_files(files):
 			highest = -1
@@ -230,6 +257,7 @@ def autosave_render(scene):
 						if int(suffix[-1]) > highest:
 							highest = int(suffix[-1])
 			return format(highest+1, '04')
+		
 		# Create string with serial number
 		filename = '{project}-' + save_number_from_files(files)
 	elif file_name_type == 'DATE':
@@ -244,28 +272,23 @@ def autosave_render(scene):
 		else:
 			filename = bpy.context.scene.autosave_render_settings.file_name_custom
 	
-	# Process elements that aren't available in the global variable replacement
-	filepath = filepath.replace("{rendertime}", str(render_time) + 's')
 	filename = filename.replace("{rendertime}", str(render_time) + 's')
-	
-	# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
 	if '{serial}' in filename:
 		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
-			filepath = filepath.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
 			filename = filename.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
-			bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global += 1
+			serialUsedGlobal = True
 		else:
-			filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
 			filename = filename.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
-			bpy.context.scene.autosave_render_settings.file_serial += 1
+			serialUsed = True
 	
-	# Replace global variables in the output file path and name strings
-	filepath = replaceVariables(filepath)
+	# Finish local and global serial number updates
+	if serialUsedGlobal:
+		bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global += 1
+	if serialUsed:
+		bpy.context.scene.autosave_render_settings.file_serial += 1
+	
+	# Replace global variables in the output name string
 	filename = replaceVariables(filename)
-	
-	# Create the project subfolder if it doesn't already exist
-	if not os.path.exists(filepath):
-		os.makedirs(filepath)
 	
 	# Combine file path and file name using system separator, add extension
 	filepath = os.path.join(filepath, filename) + extension
@@ -324,12 +347,12 @@ def replaceVariables(string):
 		renderEngine = 'Workbench'
 		renderDevice = 'GPU'
 		renderSamples = bpy.context.scene.display.render_aa
-		renderFeatures = bpy.context.scene.display.shading.light.title().replace("Matcap", "MatCap") + '-' + bpy.context.scene.display.shading.color_type.title()
+		renderFeatures = bpy.context.scene.display.shading.light.title().replace("Matcap", "MatCap") + '+' + bpy.context.scene.display.shading.color_type.title()
 
 	elif bpy.context.engine == 'BLENDER_EEVEE':
 		renderEngine = 'Eevee'
 		renderDevice = 'GPU'
-		renderSamples = str(bpy.context.scene.eevee.taa_render_samples) + '-' + str(bpy.context.scene.eevee.sss_samples) + '-' + str(bpy.context.scene.eevee.volumetric_samples)
+		renderSamples = str(bpy.context.scene.eevee.taa_render_samples) + '+' + str(bpy.context.scene.eevee.sss_samples) + '+' + str(bpy.context.scene.eevee.volumetric_samples)
 		renderFeaturesArray = []
 		if bpy.context.scene.eevee.use_gtao:
 			renderFeaturesArray.append('AO')
@@ -347,8 +370,8 @@ def replaceVariables(string):
 		# Add compute device type if GPU is enabled
 		# if renderDevice == "GPU":
 			# renderDevice += '_' + bpy.context.preferences.addons["cycles"].preferences.compute_device_type
-		renderSamples = str(round(bpy.context.scene.cycles.adaptive_threshold, 4)) + '-' + str(bpy.context.scene.cycles.samples) + '-' + str(bpy.context.scene.cycles.adaptive_min_samples)
-		renderFeatures = str(bpy.context.scene.cycles.max_bounces) + '-' + str(bpy.context.scene.cycles.diffuse_bounces) + '-' + str(bpy.context.scene.cycles.glossy_bounces) + '-' + str(bpy.context.scene.cycles.transmission_bounces) + '-' + str(bpy.context.scene.cycles.volume_bounces) + '-' + str(bpy.context.scene.cycles.transparent_max_bounces)
+		renderSamples = str(round(bpy.context.scene.cycles.adaptive_threshold, 4)) + '+' + str(bpy.context.scene.cycles.samples) + '+' + str(bpy.context.scene.cycles.adaptive_min_samples)
+		renderFeatures = str(bpy.context.scene.cycles.max_bounces) + '+' + str(bpy.context.scene.cycles.diffuse_bounces) + '+' + str(bpy.context.scene.cycles.glossy_bounces) + '+' + str(bpy.context.scene.cycles.transmission_bounces) + '+' + str(bpy.context.scene.cycles.volume_bounces) + '+' + str(bpy.context.scene.cycles.transparent_max_bounces)
 
 	elif bpy.context.engine == 'RPR':
 		renderEngine = 'ProRender'
@@ -360,8 +383,8 @@ def replaceVariables(string):
 			if gpu:
 				renderDevicesArray.append('GPU')
 		renderDevice = 'None' if len(renderDevicesArray) == 0 else '+'.join(renderDevicesArray)
-		renderSamples = str(bpy.context.scene.rpr.limits.min_samples) + '-' + str(bpy.context.scene.rpr.limits.max_samples) + '-' + str(round(bpy.context.scene.rpr.limits.noise_threshold, 4))
-		renderFeatures = str(bpy.context.scene.rpr.max_ray_depth) + '-' + str(bpy.context.scene.rpr.diffuse_depth) + '-' + str(bpy.context.scene.rpr.glossy_depth) + '-' + str(bpy.context.scene.rpr.refraction_depth) + '-' + str(bpy.context.scene.rpr.glossy_refraction_depth) + '-' + str(bpy.context.scene.rpr.shadow_depth)
+		renderSamples = str(bpy.context.scene.rpr.limits.min_samples) + '+' + str(bpy.context.scene.rpr.limits.max_samples) + '+' + str(round(bpy.context.scene.rpr.limits.noise_threshold, 4))
+		renderFeatures = str(bpy.context.scene.rpr.max_ray_depth) + '+' + str(bpy.context.scene.rpr.diffuse_depth) + '+' + str(bpy.context.scene.rpr.glossy_depth) + '+' + str(bpy.context.scene.rpr.refraction_depth) + '+' + str(bpy.context.scene.rpr.glossy_refraction_depth) + '+' + str(bpy.context.scene.rpr.shadow_depth)
 
 	elif bpy.context.engine == 'LUXCORE':
 		renderEngine = 'LuxCore'
@@ -372,21 +395,21 @@ def replaceVariables(string):
 			renderSamples += str(bpy.context.scene.luxcore.halt.time) + 's'
 		if bpy.context.scene.luxcore.halt.use_samples:
 			if len(renderSamples) > 0:
-				renderSamples += '-'
+				renderSamples += '+'
 			renderSamples += str(bpy.context.scene.luxcore.halt.samples)
 		if bpy.context.scene.luxcore.halt.use_noise_thresh:
 			if len(renderSamples) > 0:
-				renderSamples += '-'
-			renderSamples += str(bpy.context.scene.luxcore.halt.noise_thresh) + '-' + str(bpy.context.scene.luxcore.halt.noise_thresh_warmup) + '-' + str(bpy.context.scene.luxcore.halt.noise_thresh_step)
+				renderSamples += '+'
+			renderSamples += str(bpy.context.scene.luxcore.halt.noise_thresh) + '+' + str(bpy.context.scene.luxcore.halt.noise_thresh_warmup) + '+' + str(bpy.context.scene.luxcore.halt.noise_thresh_step)
 		# Features include the number of paths or bounces (depending on engine selected) and denoising if enabled
 		if bpy.context.scene.luxcore.config.engine == 'PATH':
 			renderEngine += '-Path'
-			renderFeatures = str(bpy.context.scene.luxcore.config.path.depth_total) + '-' + str(bpy.context.scene.luxcore.config.path.depth_diffuse) + '-' + str(bpy.context.scene.luxcore.config.path.depth_glossy) + '-' + str(bpy.context.scene.luxcore.config.path.depth_specular)
+			renderFeatures = str(bpy.context.scene.luxcore.config.path.depth_total) + '+' + str(bpy.context.scene.luxcore.config.path.depth_diffuse) + '+' + str(bpy.context.scene.luxcore.config.path.depth_glossy) + '+' + str(bpy.context.scene.luxcore.config.path.depth_specular)
 		else:
 			renderEngine += '-Bidir'
-			renderFeatures = str(bpy.context.scene.luxcore.config.bidir_path_maxdepth) + '-' + str(bpy.context.scene.luxcore.config.bidir_light_maxdepth)
+			renderFeatures = str(bpy.context.scene.luxcore.config.bidir_path_maxdepth) + '+' + str(bpy.context.scene.luxcore.config.bidir_light_maxdepth)
 		if bpy.context.scene.luxcore.denoiser.enabled:
-			renderFeatures += '-' + str(bpy.context.scene.luxcore.denoiser.type)
+			renderFeatures += '+' + str(bpy.context.scene.luxcore.denoiser.type)
 
 	else:
 		renderEngine = bpy.context.engine
