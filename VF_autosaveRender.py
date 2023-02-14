@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 3),
+	"version": (2, 0, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -172,7 +172,7 @@ def autosave_render(scene):
 			slot.path = slotpaths[num]
 
 	# Stop here if autosave output is disabled (side effect: render log is also prevented)
-	if not bpy.context.scene.autosave_render_settings.enable_autosave_render or not bpy.data.filepath:
+	if not (bpy.context.scene.autosave_render_settings.enable_autosave_render or bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override) or not bpy.data.filepath:
 		return {'CANCELLED'}
 
 	# Save original file format settings
@@ -215,7 +215,6 @@ def autosave_render(scene):
 	# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
 	serialUsedGlobal = False
 	serialUsed = False
-	
 	filepath = filepath.replace("{rendertime}", str(render_time) + 's')
 	if '{serial}' in filepath:
 		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
@@ -497,6 +496,11 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		maxlen=4096)
 	
 	# Override individual project autosave location and file name settings
+	enable_autosave_render_override: bpy.props.BoolProperty(
+		name="Always Autosave",
+		description="Globally enables autosaving renders regardless of individual project settings",
+		default=False)
+	
 	file_location_override: bpy.props.BoolProperty(
 		name="File Location",
 		description='Global override for the per-project directory setting',
@@ -582,16 +586,26 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 #		layout.label(text="")
 		layout.label(text="Global Autosave Overrides:")
 		
-		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
 		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid2.prop(self, "enable_autosave_render_override")
+		grid2.separator()
+
+		# Disable everything if autosave override isn't engaged
+		group = layout.column()
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
+			group.active = False
+			group.enabled = False
+		
+		ops = group.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
+		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid2.separator()
 		if not ((bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM' and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global) or (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global)):
 			grid2.active = False
 			grid2.enabled = False
 		grid2.prop(self, "file_serial_global", text="")
 		
-		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		toggle = grid2.column(align=True)
 		toggle.prop(self, "file_location_override")
 		input = grid2.column(align=True)
@@ -600,7 +614,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			input.enabled = False
 		input.prop(self, "file_location_global", text='')
 		
-		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		toggle = grid2.column()
 		toggle.prop(self, "file_name_override")
 		col = grid2.column()
@@ -622,7 +636,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			input.enabled = False
 		input.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
 		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
-			error = layout.box()
+			error = group.box()
 			error.label(text="Python API can only save single layer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
 
@@ -724,7 +738,8 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 		# return (context.engine in cls.compatible_render_engines)
 	
 	def draw_header(self, context):
-		self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_render', text='')
+		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
+			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_render', text='')
 	
 	def draw(self, context):
 		layout = self.layout
@@ -732,7 +747,7 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 		layout.use_property_split = True
 		
 		# Disable inputs if Autosave is disabled
-		if not bpy.context.scene.autosave_render_settings.enable_autosave_render:
+		if not bpy.context.scene.autosave_render_settings.enable_autosave_render and not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
 			layout.active = False
 			layout.enabled = False
 		
