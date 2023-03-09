@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 4),
+	"version": (2, 0, 5),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -10,14 +10,15 @@ bl_info = {
 	"tracker_url": "",
 	"category": "Render"}
 
-import os
-import platform
-import datetime
-import time
 import bpy
 from bpy.app.handlers import persistent
-from re import findall, search, M as multiline
+import datetime
+import json
+import os
 from pathlib import Path
+import platform
+from re import findall, search, M as multiline
+import time
 
 IMAGE_FORMATS = (
 	'BMP',
@@ -79,39 +80,38 @@ def autosave_render_start(scene):
 		# Replace scene filepath output with the processed version
 		scene.render.filepath = replaceVariables(filepath)
 		
-	# Filter compositing node file path if enabled
-	# Trusting the short-circuit boolean expression ("not technically lazy") evaluation in Python means this lengthy series of ANDs doesn't run into any issues at the end if the node doesn't exist
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and not bpy.context.scene.node_tree.nodes["File Output"].mute:
-		# Get file path
-		# filepath = bpy.context.scene.node_tree.nodes["File Output"].base_path
+	# Filter compositing node file path if turned on in the plugin settings and compositing is enabled
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes and bpy.context.scene.use_nodes:
+		# Iterate through Compositor nodes, adding all file output node path and sub-path variables to a dictionary
+		node_settings = {}
+		for node in bpy.context.scene.node_tree.nodes:
+			# Check if the node is a File Output node
+			if isinstance(node, bpy.types.CompositorNodeOutputFile):
+				# Save the base_path property and the file_slots dictionary entry
+				node_settings[node.name] = {
+					"base_path": node.base_path,
+					"file_slots": {}
+				}
+				# Replace variables
+				if '{serial}' in node.base_path:
+					node.base_path = node.base_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
+					serialUsed = True
+				node.base_path = replaceVariables(node.base_path)
+				
+				# Save and then process the sub-path property of each file slot
+				for i, slot in enumerate(node.file_slots):
+					node_settings[node.name]["file_slots"][i] = {
+						"path": slot.path
+					}
+					# Replace variables
+					if '{serial}' in slot.path:
+						slot.path = slot.path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
+						serialUsed = True
+					slot.path = replaceVariables(slot.path)
+					
+		# Convert the dictionary to JSON format and save to the plugin preferences for safekeeping while rendering
+		bpy.context.scene.autosave_render_settings.output_file_nodes = json.dumps(node_settings)
 		
-		# Get file path and all output file names
-		paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path + '||']
-		for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
-			paths.append(slot.path)
-		paths = '||'.join(paths)
-		
-		# Save original paths
-		bpy.context.scene.autosave_render_settings.output_file_node = paths
-		
-		# Check if the serial variable is used
-		if '{serial}' in paths:
-			paths = paths.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
-			serialUsed = True
-			
-		# Process entire string
-		paths = replaceVariables(paths)
-		
-		# Split the string back into individual pieces (this is the STUPIDEST solution, but I'm not confident I can do it in any sort of respectable way while also storing the original string in a Blender preference to be restored later)
-		paths = paths.split("||||")
-		slotpaths = paths[1].split("||")
-		
-		# Replace node path and slots with the processed version
-		bpy.context.scene.node_tree.nodes["File Output"].base_path = paths[0]
-		for num, slot in enumerate(bpy.context.scene.node_tree.nodes["File Output"].file_slots):
-			slot.path = slotpaths[num]
-		# bpy.context.scene.node_tree.nodes["File Output"].base_path = replaceVariables(filepath)
-			
 	# Increment the serial number if it was used once or more
 	if serialUsed:
 		bpy.context.scene.autosave_render_settings.output_file_serial += 1
@@ -147,39 +147,45 @@ def autosave_render_estimate(scene):
 def autosave_render(scene):
 	# Set estimated render time active to false (render is complete or canceled, estimate display is no longer needed)
 	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
-
+	
 	# Calculate elapsed render time
 	render_time = round(time.time() - float(bpy.context.scene.autosave_render_settings.start_date), 2)
-
+	
 	# Update total render time
 	bpy.context.scene.autosave_render_settings.total_render_time = bpy.context.scene.autosave_render_settings.total_render_time + render_time
-
+	
 	# Restore unprocessed file path if processing is enabled
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
 		scene.render.filepath = bpy.context.scene.autosave_render_settings.output_file_path
-
+	
 	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node and bpy.context.scene.use_nodes and 'File Output' in bpy.context.scene.node_tree.nodes and bpy.context.scene.autosave_render_settings.output_file_node:
-		# bpy.context.scene.node_tree.nodes["File Output"].base_path = bpy.context.scene.autosave_render_settings.output_file_node
-		paths = bpy.context.scene.autosave_render_settings.output_file_node
-		# Split the saved string back into individual pieces
-		paths = paths.split("||||")
-		slotpaths = paths[1].split("||")
-
-		# Replace node path and slots with the processed version
-		bpy.context.scene.node_tree.nodes["File Output"].base_path = paths[0]
-		for num, slot in enumerate(bpy.context.scene.node_tree.nodes["File Output"].file_slots):
-			slot.path = slotpaths[num]
-
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes and bpy.context.scene.use_nodes and len(bpy.context.scene.autosave_render_settings.output_file_nodes) > 2:
+		
+		# Get the JSON data from the preferences string where it was stashed
+		json_data = bpy.context.scene.autosave_render_settings.output_file_nodes
+		
+		# If the JSON data is not empty, deserialize it and restore the node settings
+		if json_data:
+			node_settings = json.loads(json_data)
+			for node_name, node_data in node_settings.items():
+				node = bpy.context.scene.node_tree.nodes.get(node_name)
+				if isinstance(node, bpy.types.CompositorNodeOutputFile):
+					node.base_path = node_data.get("base_path", node.base_path)
+					file_slots_data = node_data.get("file_slots", {})
+					for i, slot_data in file_slots_data.items():
+						slot = node.file_slots[int(i)]
+						if slot:
+							slot.path = slot_data.get("path", slot.path)
+	
 	# Stop here if autosave output is disabled (side effect: render log is also prevented)
 	if not (bpy.context.scene.autosave_render_settings.enable_autosave_render or bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override) or not bpy.data.filepath:
 		return {'CANCELLED'}
-
+	
 	# Save original file format settings
 	original_format = scene.render.image_settings.file_format
 	original_colormode = scene.render.image_settings.color_mode
 	original_colordepth = scene.render.image_settings.color_depth
-
+	
 	# Set up render output formatting with override
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
 		file_format = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global
@@ -197,7 +203,7 @@ def autosave_render(scene):
 	elif file_format == 'OPEN_EXR':
 		scene.render.image_settings.file_format = 'OPEN_EXR'
 	extension = scene.render.file_extension
-
+	
 	# Get project name
 	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
 	
@@ -473,9 +479,9 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		name='Render Output Variables',
 		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
 		default=True)
-	filter_output_file_node: bpy.props.BoolProperty(
+	filter_output_file_nodes: bpy.props.BoolProperty(
 		name='File Output Node Variables',
-		description='Implements most of the same keywords used in the custom naming scheme in a Compositing tab "File Output" node',
+		description='Implements most of the same keywords used in the custom naming scheme in Compositing tab "File Output" nodes',
 		default=True)
 	remaining_render_time: bpy.props.BoolProperty(
 		name="Estimate Remaining Render Time",
@@ -557,7 +563,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	# Preferences:
 		grid0 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid0.prop(self, "filter_output_file_path")
-		grid0.prop(self, "filter_output_file_node")
+		grid0.prop(self, "filter_output_file_nodes")
 		
 	# Render Time:
 		layout.separator()
@@ -712,7 +718,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		name="Original Render Path",
 		description="Stores the original render path as a string to allow for successful restoration after rendering completes",
 		default="")
-	output_file_node: bpy.props.StringProperty(
+	output_file_nodes: bpy.props.StringProperty(
 		name="Original Node Path",
 		description="Stores the original node path as a string to allow for successful restoration after rendering completes",
 		default="")
@@ -810,6 +816,7 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 
 # bpy.context.window_manager.clipboard = "test"
 
+# Popup panel
 class AutosaveRenderVariablePopup(bpy.types.Operator):
 	"""List of the available variables"""
 	bl_label = "Variable List"
@@ -842,6 +849,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 			elif item != "{rendertime}" or self.rendertime:
 				col.label(text = item)
 
+# Render output UI
 def RENDER_PT_output_path_variable_list(self, context):
 	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
 		# UI layout for Scene Output
@@ -856,26 +864,29 @@ def RENDER_PT_output_path_variable_list(self, context):
 			input.enabled = False
 		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
 
+# Node output UI
 def NODE_PT_output_path_variable_list(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_node:
-		# Get file path and all output file names from the primary node
-		paths = [bpy.context.scene.node_tree.nodes["File Output"].base_path]
-		for slot in bpy.context.scene.node_tree.nodes["File Output"].file_slots:
-			paths.append(slot.path)
-		paths = ''.join(paths)
-		
-		# UI layout for Node Properties
-		layout = self.layout
-		layout.use_property_decorate = False
-		layout.use_property_split = True
-		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = False
-		input = layout.row()
-		if not '{serial}' in paths:
-			input.active = False
-			input.enabled = False
-		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
-		layout.use_property_split = False # Base path interface doesn't specify false, it assumes it, so the UI gets screwed up if we don't reset here
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes:
+		active_node = bpy.context.scene.node_tree.nodes.active
+		if isinstance(active_node, bpy.types.CompositorNodeOutputFile):
+			# Get file path and all output file names from the current active node
+			paths = [bpy.context.scene.node_tree.nodes.active.base_path]
+			for slot in bpy.context.scene.node_tree.nodes.active.file_slots:
+				paths.append(slot.path)
+			paths = ''.join(paths)
+			
+			# UI layout for Node Properties
+			layout = self.layout
+			layout.use_property_decorate = False
+			layout.use_property_split = True
+			ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+			ops.rendertime = False
+			input = layout.row()
+			if not '{serial}' in paths:
+				input.active = False
+				input.enabled = False
+			input.prop(context.scene.autosave_render_settings, 'output_file_serial')
+			layout.use_property_split = False # Base path interface doesn't specify false, it assumes it, so the UI gets screwed up if we don't reset here
 
 ###########################################################################
 # Display render time in the Render panel
