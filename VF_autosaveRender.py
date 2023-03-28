@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 7),
+	"version": (2, 0, 8),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -51,7 +51,7 @@ IMAGE_EXTENSIONS = (
 variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
-				"title,Identifiers,COPY_ID", "{date}", "{Y},{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
+				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
 
 ###########################################################################
 # Start time function
@@ -444,15 +444,20 @@ def replaceVariables(string):
 	string = string.replace("{version}", bpy.app.version_string + '-' + bpy.app.version_cycle)
 	# Identifier variables
 	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
-	string = string.replace("{Y}", datetime.datetime.now().strftime('%Y'))
-	string = string.replace("{y}", datetime.datetime.now().strftime('%y'))
+	string = string.replace("{year}", "{y}") # Alternative variable
+	string = string.replace("{y}", datetime.datetime.now().strftime('%Y'))
+	string = string.replace("{month}", "{m}") # Alternative variable
 	string = string.replace("{m}", datetime.datetime.now().strftime('%m'))
+	string = string.replace("{day}", "{d}") # Alternative variable
 	string = string.replace("{d}", datetime.datetime.now().strftime('%d'))
 	string = string.replace("{time}", datetime.datetime.now().strftime('%H-%M-%S'))
+	string = string.replace("{hour}", "{H}") # Alternative variable
 	string = string.replace("{H}", datetime.datetime.now().strftime('%H'))
+	string = string.replace("{minute}", "{M}") # Alternative variable
 	string = string.replace("{M}", datetime.datetime.now().strftime('%M'))
+	string = string.replace("{second}", "{S}") # Alternative variable
 	string = string.replace("{S}", datetime.datetime.now().strftime('%S'))
-		# {serial} is handled elsewhere
+		# the {serial} variable is handled elsewhere to account for separate autosave and output numbering
 	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	return string
 
@@ -835,7 +840,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 		return {'FINISHED'}
 
 	def invoke(self, context, event):
-		return context.window_manager.invoke_popup(self, width=480)
+		return context.window_manager.invoke_popup(self, width=380)
 
 	def draw(self, context):
 		layout = self.layout
