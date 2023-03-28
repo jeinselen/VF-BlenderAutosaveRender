@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 5),
+	"version": (2, 0, 6),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -51,7 +51,7 @@ IMAGE_EXTENSIONS = (
 variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
-				"title,Identifiers,COPY_ID", "{date}", "{Y}{y}{m}{d}", "{time}", "{H}{M}{S}", "{serial}", "{frame}"]
+				"title,Identifiers,COPY_ID", "{date}", "{Y},{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
 
 ###########################################################################
 # Start time function
@@ -814,8 +814,6 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 ###########################################################################
 # Variable info popup and serial number UI
 
-# bpy.context.window_manager.clipboard = "test"
-
 # Popup panel
 class AutosaveRenderVariablePopup(bpy.types.Operator):
 	"""List of the available variables"""
@@ -834,20 +832,43 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 		return {'FINISHED'}
 
 	def invoke(self, context, event):
-		return context.window_manager.invoke_popup(self, width=400)
+		return context.window_manager.invoke_popup(self, width=480)
 
 	def draw(self, context):
 		layout = self.layout
-		grid = self.layout.grid_flow(columns=4, even_columns=True, even_rows=False)
+		grid = self.layout.grid_flow(columns = 4, even_columns = True, even_rows = True)
 		for item in variableArray:
 			# Display headers
-			if item.startswith("title,"):
-				x = item.split(",")
+			if item.startswith('title,'):
+				x = item.split(',')
 				col = grid.column()
 				col.label(text = x[1], icon = x[2])
 			# Display list elements
 			elif item != "{rendertime}" or self.rendertime:
-				col.label(text = item)
+#				col.label(text = item)
+				if ',' in item:
+					subrow = col.row(align = True)
+					for subitem in item.split(','):
+						ops = subrow.operator(AutosaveRenderVariableCopy.bl_idname, text = subitem, emboss = False)
+						ops.string = subitem
+				else:
+					ops = col.operator(AutosaveRenderVariableCopy.bl_idname, text = item, emboss = False)
+					ops.string = item
+		layout.label(text = 'Click a variable to copy it to the clipboard', icon = "COPYDOWN")
+
+# Copy string to clipboard
+class AutosaveRenderVariableCopy(bpy.types.Operator):
+	"""Copy variable to the clipboard"""
+	bl_label = "Copy to clipboard"
+	bl_idname = "vf.autosave_render_variable_copy"
+	bl_options = {'REGISTER', 'INTERNAL'}
+	
+	string: bpy.props.StringProperty()
+	
+	def execute(self, context):
+		context.window_manager.clipboard = self.string
+		print(context.window_manager.clipboard)
+		return {'FINISHED'}
 
 # Render output UI
 def RENDER_PT_output_path_variable_list(self, context):
@@ -911,7 +932,7 @@ def estimated_render_time(self, context):
 ###########################################################################
 # Addon registration functions
 
-classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_render, AutosaveRenderVariablePopup)
+classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy)
 
 def register():
 	for cls in classes:
