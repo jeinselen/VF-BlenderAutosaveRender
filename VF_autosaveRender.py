@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 6),
+	"version": (2, 0, 7),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -216,6 +216,9 @@ def autosave_render(scene):
 	# If the file path contains one or fewer characters, replace it with the project path
 	if len(filepath) <= 1:
 		filepath = os.path.join(os.path.dirname(bpy.data.filepath), projectname)
+		
+	# Convert relative path into absolute path for Python compatibility
+	filepath = bpy.path.abspath(filepath)
 	
 	# Process elements that aren't available in the global variable replacement
 	# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
@@ -867,7 +870,7 @@ class AutosaveRenderVariableCopy(bpy.types.Operator):
 	
 	def execute(self, context):
 		context.window_manager.clipboard = self.string
-		print(context.window_manager.clipboard)
+#		print(context.window_manager.clipboard)
 		return {'FINISHED'}
 
 # Render output UI
