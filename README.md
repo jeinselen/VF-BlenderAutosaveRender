@@ -2,11 +2,12 @@
 
 Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables. This Blender add-on helps automate file naming (enabling easier and more advanced production workflows) and makes test renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
 
-![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.png)
+![screenshot of the variable popup window in the compositing tab](images/banner.jpg)
 
 
 
 ## Installation and Usage
+
 - Download [VF_autosaveRender.py](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutoSaveRender/main/VF_autosaveRender.py)
 - Open Blender Preferences and navigate to the "Add-ons" tab
 - Install and enable the add-on
@@ -14,13 +15,17 @@ Automatically saves a numbered or dated image after every render and extends the
 
 _**Warning:**_ version 2 of this add-on changes the capitalisation of the file, and will fail to install or run correctly if prior versions are not fully cleared from the system before upgrading. Restarting Blender may be necessary between uninstalling an older version and installing this update.
 
+![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.png)
+
+The default settings will work as-is, saving each render in a folder alongside the project file. But there's more...
+
 
 
 ## Global Preferences
 
-![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1-preferences.png)
-
 Add-on preferences are found in the Blender Preferences panel add-on tab, at the bottom of the plugin listing. These settings apply globally, except for the `Total Render Time` value which is saved within the project file.
+
+![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1-preferences.png)
 
 ### Preferences
 - `Render Output Variables` enables dynamic variables in the output file path
@@ -44,7 +49,68 @@ Add-on preferences are found in the Blender Preferences panel add-on tab, at the
 
 
 
-## Project Settings
+## Dynamic Variables
+
+Dynamic variables can be used in Blender's Output Path, in the Base Path and File Subpath strings of File Output nodes in the Compositing tab, and in the Custom String setting of the Autosave Render sub-panel.
+
+![screenshot of the add-on's custom variable popup window](images/screenshot3-variables.png)
+
+The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values typically unique to the time or iteration of the render).
+
+1. **Project variables**
+  - `{project}` = the name of the Blender file
+  - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
+  - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
+  - `{camera}` = render camera (independent of selection or active status)
+  - `{item}` = active item (if no item is selected or active, this will return "None")
+2. **Rendering variables**
+  - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+  - `{device}` = CPU or GPU device
+    - Workbench and Eevee always use the GPU
+    - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
+    - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
+    - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
+  - `{samples}` = number of samples
+    - Workbench will return the type of antialiasing enabled
+    - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
+    - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
+    - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
+    - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
+    - All outputs reflect the order displayed in the Blender interface
+  - `{features}` = enabled features or ray recursions
+    - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+    - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
+    - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+    - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
+    - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
+  - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
+3. **System variables**
+  - `{host}` = name of the computer or host being used for rendering
+  - `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
+  - `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
+4. **Identifier variables**
+  - `{date}` = current date in YYYY-MM-DD format
+    - This is a combined shortcut for the individual date variables below
+  - `{y}` or `{year}` = current year in YYYY format
+  - `{m}` or `{month}` = current month in MM format
+  - `{d}` or `{day}` = current day in DD format
+  - `{time}` = current time in HH-MM-SS 24-hour format
+    - This is a combined shortcut for the individual time variables below
+    - Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
+  - `{H}` or `{hour}` = current hour in HH 24-hour format
+  - `{M}` or `{minute}` = current minute in MM format
+  - `{S}` or `{second}` = current second in SS format
+  - `{serial}` = automatically incremented serial number padded to 4 digits
+    - While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving versus the other file output methods is separate so that test renders can use their own serial number tracking
+    - The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
+    - Files may be overwritten if this counter is manually reset; both a feature and a danger
+  - `{frame}` = current frame number (padded to four digits)
+
+_**Warning:**_ using a custom string may result in overwriting or failing to save files if the generated name is not unique. For example, if date and time or serial number variables are not included.
+
+
+
+## Autosave Settings
 
 ![screenshot of the add-on's project settings panel with customised autosave settings](images/screenshot2-autosave.png)
 
@@ -52,6 +118,7 @@ Project settings are found at the bottom of the Render Output panel and are uniq
 
 - `Variable List`
   - This opens a reference panel with all of the variables that can be used in either the `file location` or `custom string` strings below
+  - Clicking on a variable will copy it to the clipboard, ready for pasting wherever it's needed in an output path or file name
 
 - `Serial Number`
   - This is the local project serial number for autosaved files, independent of the serial number for output files, and will be unused if file location or file name inputs are replaced with a global override in the `Blender Preferences > Add-on` window, which uses the serial number saved in the plugin preferences
@@ -66,54 +133,7 @@ Project settings are found at the bottom of the Render Output panel and are uniq
   - `Project Name + Date & Time` uses the name of the blender file and the local date and time (formatted YYYY-MM-DD HH-MM-SS using 24 hour time)
   - `Project Name + Render Engine + Render Time` uses the name of the blender file, the name of the render engine, and the time it took to render
     - When a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
-  - `Custom String` uses pattern replacement to allow for entirely unique file naming patterns ![screenshot of the add-on's custom variable popup window](images/screenshot3-variables.png)
-    1. **Project variables**
-    - `{project}` = the name of the Blender file
-    - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
-    - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
-    - `{camera}` = render camera (independent of selection or active status)
-    - `{item}` = active item (if no item is selected or active, this will return "None")
-    2. **Rendering variables**
-    - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
-    - `{device}` = CPU or GPU device
-      - Workbench and Eevee always use the GPU
-      - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
-      - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
-      - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
-    - `{samples}` = number of samples
-      - Workbench will return the type of antialiasing enabled
-      - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
-      - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
-      - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
-      - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
-      - All outputs reflect the order displayed in the Blender interface
-    - `{features}` = enabled features or ray recursions
-      - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
-      - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
-      - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
-      - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
-      - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
-    - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
-    3. **System variables**
-    - `{host}` = name of the computer or host being used for rendering
-    - `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
-    - `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
-    4. **Identifier variables**
-    - `{date}` = current date in YYYY-MM-DD format, a shortcut for the individual variables below
-    - `{Y}` = current year in YYYY format (note the capitalisation)
-    - `{y}` = current year in YY format
-    - `{m}` = current month in MM format
-    - `{d}` = current day in DD format
-    - `{time}` = current time in HH-MM-SS 24-hour format, a shortcut for the individual variables below
-    - `{H}` = current hour in HH 24-hour format
-    - `{M}` = current minute in MM format
-    - `{S}` = current second in SS format
-    - `{serial}` = automatically incremented serial number padded to 4 digits
-    - `{frame}` = current frame number (padded to four digits)
-
-- `Serial Number` input field is enabled only when the text `{serial}` appears in the `File Location` or `Custom String` fields, and automatically increments every time a render is saved (files may be overwritten if this counter is manually reset; both a feature and a danger!)
-
-_**Warning:**_ using a custom string may result in overwriting or failing to save files if the generated name is not unique. For example, if date and time or serial number variables are not included.
+  - `Custom String` uses the dynamic variables listed above to allow for entirely unique file naming patterns
 
 - `File Format`
   - `Project Setting` will use the same format as set in the Render Output panel (see note below about multilayer EXR limitations)
@@ -149,7 +169,7 @@ This feature supports customisation of both the `Base Path` and each image input
 
 ![screenshot of the estimated render time remaining display in the menu bar of the Blender render window](images/screenshot6-estimate.png)
 
-When enabled in the plugin preferences, Autosave Render can track elapsed time during animation rendering and calculate a rough estimate based on the number of frames completed versus remaining.
+When enabled in the plugin preferences, the plugin can track elapsed time during animation rendering and calculate a rough estimate based on the number of frames completed versus remaining.
 
 This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability in render time from frame to frame, but can give a general guess as to how much render time remains.
 
@@ -159,7 +179,7 @@ The estimation will only show up after the first frame of an animation sequence 
 
 ## Notes
 
-- Autosave Render depends on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or local directory for the add-on to work with
+- Autosaving a render depends on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or local directory for the add-on to work with
   - An alternative version of the plugin that supports unsaved projects is [available in this older branch](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/tree/Support_Unsaved_Projects)
 - Only the final frame will be autosaved when rendering animation sequences, preventing mass duplication but still allowing for total render time to be saved in the file name (if used in the `Custom String` setting)
 - Total internal render time will continue to increment even when auto file saving is toggled off in the output panel
