@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 8),
+	"version": (2, 0, 9),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -48,7 +48,7 @@ IMAGE_EXTENSIONS = (
 	'tif'
 )
 
-variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}",
+variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}", "{material}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
 				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
@@ -432,6 +432,7 @@ def replaceVariables(string):
 	string = string.replace("{collection}", bpy.context.collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
+	string = string.replace("{material}", bpy.context.view_layer.objects.active.active_material.name if bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.active_material else 'None')
 	# Rendering variables
 	string = string.replace("{renderengine}", renderEngine)
 	string = string.replace("{device}", renderDevice)

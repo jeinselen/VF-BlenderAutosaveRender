@@ -1,6 +1,6 @@
 # VF Autosave Render + Output Variables
 
-Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables. This Blender add-on helps automate file naming (enabling easier and more advanced production workflows) and makes test renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
+Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables. This Blender add-on helps automate file naming (enabling more advanced production workflows) and makes test renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
 
 ![screenshot of the variable popup window in the compositing tab](images/banner.jpg)
 
@@ -17,7 +17,7 @@ _**Warning:**_ version 2 of this add-on changes the capitalisation of the file, 
 
 ![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.png)
 
-The default settings will work as-is, saving each render in a folder alongside the project file. But there's more...
+The default settings will work as-is, saving each render in a folder alongside the project file with automatic serialisation and JPG compression. But significant customisation is possible, especially through the use of output path and file name variables.
 
 
 
@@ -33,13 +33,13 @@ Add-on preferences are found in the Blender Preferences panel add-on tab, at the
 
 ### Render Time
 - `Show Project Render Time` toggles the "total time spent rendering" display in the Blender Output panel
-  - `Total Render Time` allows manual adjustment or resetting of the current project's render time tracking (this is the only non-global per-project value in the plugin settings panel)
+	- `Total Render Time` allows manual adjustment or resetting of the current project's render time tracking (this is the only non-global per-project value in the plugin settings panel)
 - `Save External Render Time Log` enables tracking of render time outside of the Blender file, supporting tracking during command line rendering (where the internal project value is typically not saved) or tallying the render time for all Blender projects in the same directory
-  - Sub-folders and relative paths can be used (not absolute paths)
-  - Only the `{project}` dynamic variable is supported
-  - The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
-  - Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
-  - Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default autosave directory (this is specific to MacOS and Linux; backslash would be required in Windows)
+	- Sub-folders and relative paths can be used (not absolute paths)
+	- Only the `{project}` dynamic variable is supported
+	- The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
+	- Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
+	- Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default autosave directory (this is specific to MacOS and Linux; backslash would be required in Windows)
 - `Estimate Remaining Render Time` turns on animation render time estimation in the render window menu bar (see the [Estimated Time Remaining](https://github.com/jeinselenVF/VF-BlenderAutosaveRender#estimated-time-remaining) section below for details)
 
 ### Global Autosave Overrides
@@ -55,56 +55,58 @@ Dynamic variables can be used in Blender's Output Path, in the Base Path and Fil
 
 ![screenshot of the add-on's custom variable popup window](images/screenshot3-variables.png)
 
-The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values typically unique to the time or iteration of the render).
+The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values unique to the time or iteration of the render).
 
 1. **Project variables**
-  - `{project}` = the name of the Blender file
-  - `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
-  - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
-  - `{camera}` = render camera (independent of selection or active status)
-  - `{item}` = active item (if no item is selected or active, this will return "None")
+	- `{project}` = the name of the Blender file
+	- `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
+	- `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
+	- `{camera}` = render camera (independent of selection or active status)
+	- `{item}` = active item (if no item is selected or active, this will return "None")
+	- `{material}` = active material of active object (if not found, this will return "None")
+		- This variable may be more prone to failure because it requires both a selected object and an active material slot, and should only be used in scenarios where the active selection is well managed
 2. **Rendering variables**
-  - `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
-  - `{device}` = CPU or GPU device
-    - Workbench and Eevee always use the GPU
-    - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
-    - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
-    - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
-  - `{samples}` = number of samples
-    - Workbench will return the type of antialiasing enabled
-    - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
-    - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
-    - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
-    - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
-    - All outputs reflect the order displayed in the Blender interface
-  - `{features}` = enabled features or ray recursions
-    - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
-    - Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
-    - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
-    - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
-    - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
-  - `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
+	- `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
+	- `{device}` = CPU or GPU device
+		- Workbench and Eevee always use the GPU
+		- Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
+		- Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
+		- LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
+	- `{samples}` = number of samples
+		- Workbench will return the type of antialiasing enabled
+		- Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
+		- Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
+		- Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
+		- LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
+		- All outputs reflect the order displayed in the Blender interface
+	- `{features}` = enabled features or ray recursions
+		- Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+		- Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
+		- Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+		- Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
+		- LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
+	- `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
 3. **System variables**
-  - `{host}` = name of the computer or host being used for rendering
-  - `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
-  - `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
+	- `{host}` = name of the computer or host being used for rendering
+	- `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
+	- `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
 4. **Identifier variables**
-  - `{date}` = current date in YYYY-MM-DD format
-    - This is a combined shortcut for the individual date variables below
-  - `{y}` or `{year}` = current year in YYYY format
-  - `{m}` or `{month}` = current month in MM format
-  - `{d}` or `{day}` = current day in DD format
-  - `{time}` = current time in HH-MM-SS 24-hour format
-    - This is a combined shortcut for the individual time variables below
-    - Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
-  - `{H}` or `{hour}` = current hour in HH 24-hour format
-  - `{M}` or `{minute}` = current minute in MM format
-  - `{S}` or `{second}` = current second in SS format
-  - `{serial}` = automatically incremented serial number padded to 4 digits
-    - While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving versus the other file output methods is separate so that test renders can use their own serial number tracking
-    - The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
-    - Files may be overwritten if this counter is manually reset; both a feature and a danger
-  - `{frame}` = current frame number (padded to four digits)
+	- `{date}` = current date in YYYY-MM-DD format
+		- This is a combined shortcut for the individual date variables below
+	- `{y}` or `{year}` = current year in YYYY format
+	- `{m}` or `{month}` = current month in MM format
+	- `{d}` or `{day}` = current day in DD format
+	- `{time}` = current time in HH-MM-SS 24-hour format
+		- This is a combined shortcut for the individual time variables below
+		- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
+	- `{H}` or `{hour}` = current hour in HH 24-hour format
+	- `{M}` or `{minute}` = current minute in MM format
+	- `{S}` or `{second}` = current second in SS format
+	- `{serial}` = automatically incremented serial number padded to 4 digits
+		- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving versus the other file output methods is separate so that test renders can use their own serial number tracking
+		- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
+		- Files may be overwritten if this counter is manually reset; both a feature and a danger
+	- `{frame}` = current frame number (padded to four digits)
 
 _**Warning:**_ using a custom string may result in overwriting or failing to save files if the generated name is not unique. For example, if date and time or serial number variables are not included.
 
@@ -117,29 +119,29 @@ _**Warning:**_ using a custom string may result in overwriting or failing to sav
 Project settings are found at the bottom of the Render Output panel and are unique per-project. Automatic saving of every render can be disabled by unchecking `Autosave Render`, which is turned on by default.
 
 - `Variable List`
-  - This opens a reference panel with all of the variables that can be used in either the `file location` or `custom string` strings below
-  - Clicking on a variable will copy it to the clipboard, ready for pasting wherever it's needed in an output path or file name
+	- This opens a reference panel with all of the variables that can be used in either the `file location` or `custom string` strings below
+	- Clicking on a variable will copy it to the clipboard, ready for pasting wherever it's needed in an output path or file name
 
 - `Serial Number`
-  - This is the local project serial number for autosaved files, independent of the serial number for output files, and will be unused if file location or file name inputs are replaced with a global override in the `Blender Preferences > Add-on` window, which uses the serial number saved in the plugin preferences
-  - It will be greyed out if the variable `{serial}` does not appear in the `file location ` or `custom string` inputs
+	- This is the local project serial number for autosaved files, independent of the serial number for output files, and will be unused if file location or file name inputs are replaced with a global override in the `Blender Preferences > Add-on` window, which uses the serial number saved in the plugin preferences
+	- It will be greyed out if the variable `{serial}` does not appear in the `file location ` or `custom string` inputs
 
 - `Autosave Location`
-  - Leave a single forward slash `/` to automatically generate a folder with the same name and in the same directory as the Blender project
-  - Or select a specific directory such as `/project/renders/autosave/` to automatically save all renders to the same location
+	- Leave a single forward slash `/` to automatically generate a folder with the same name and in the same directory as the Blender project
+	- Or select a specific directory such as `/project/renders/autosave/` to automatically save all renders to the same location
 
 - `File Name`
-  - `Project Name + Serial Number` uses the name of the Blender file and an auto-generated serial number (it will detect any existing files in the autosave location and increment the highest number found)
-  - `Project Name + Date & Time` uses the name of the blender file and the local date and time (formatted YYYY-MM-DD HH-MM-SS using 24 hour time)
-  - `Project Name + Render Engine + Render Time` uses the name of the blender file, the name of the render engine, and the time it took to render
-    - When a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
-  - `Custom String` uses the dynamic variables listed above to allow for entirely unique file naming patterns
+	- `Project Name + Serial Number` uses the name of the Blender file and an auto-generated serial number (it will detect any existing files in the autosave location and increment the highest number found)
+	- `Project Name + Date & Time` uses the name of the blender file and the local date and time (formatted YYYY-MM-DD HH-MM-SS using 24 hour time)
+	- `Project Name + Render Engine + Render Time` uses the name of the blender file, the name of the render engine, and the time it took to render
+		- When a sequence is rendered, only the final frame will be saved and this value will be the total sequence render time, not the per-frame render time
+	- `Custom String` uses the dynamic variables listed above to allow for entirely unique file naming patterns
 
 - `File Format`
-  - `Project Setting` will use the same format as set in the Render Output panel (see note below about multilayer EXR limitations)
-  - `PNG`
-  - `JPEG`
-  - `OpenEXR`
+	- `Project Setting` will use the same format as set in the Render Output panel (see note below about multilayer EXR limitations)
+	- `PNG`
+	- `JPEG`
+	- `OpenEXR`
 
 File formats will use whatever compression preferences have been set in the project file. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as the Blender output format and customise the settings, then switch back to PNG. When the add-on saves the render file, it'll use the (now invisible) JPG settings saved in the project file.
 
@@ -180,10 +182,10 @@ The estimation will only show up after the first frame of an animation sequence 
 ## Notes
 
 - Autosaving a render depends on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or local directory for the add-on to work with
-  - An alternative version of the plugin that supports unsaved projects is [available in this older branch](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/tree/Support_Unsaved_Projects)
-- Only the final frame will be autosaved when rendering animation sequences, preventing mass duplication but still allowing for total render time to be saved in the file name (if used in the `Custom String` setting)
+	- An alternative version of the plugin that supports unsaved projects is [available in this older branch](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/tree/Support_Unsaved_Projects)
+- Only the final frame will be autosaved when rendering animation sequences, preventing mass duplication of frames but still allowing for total render time to be saved in the file name (if included with the `Custom String` setting)
 - Total internal render time will continue to increment even when auto file saving is toggled off in the output panel
-- Total internal render time will not increment when rendering files from the command line, since it depends on being saved within the project file (the command line interface doesn't typically save the project file after rendering is completed)
+- Total internal render time will not increment when rendering files from the command line, since it depends on being saved within the project file (the command line interface doesn't typically save the project file after rendering is completed unless otherwise triggered)
 - The Blender Python API `image.save_image` has a known bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087), saving only a single layer file instead
-  - I'm not aware of any reasonable workarounds, simply waiting for the Blender team to fix the issue
+	- I'm not aware of any reasonable workarounds, currently waiting for the Blender team to fix the issue
 - This add-on is provided as-is with no warranty or guarantee regarding suitability, security, safety, or otherwise. Use at your own risk.
