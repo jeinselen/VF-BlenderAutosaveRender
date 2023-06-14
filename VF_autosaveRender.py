@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 0, 9),
+	"version": (2, 1, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -19,6 +19,9 @@ from pathlib import Path
 import platform
 from re import findall, search, M as multiline
 import time
+# FFmpeg system access
+import subprocess
+from shutil import which
 
 IMAGE_FORMATS = (
 	'BMP',
@@ -565,6 +568,27 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			],
 		default='JPEG')
 	
+	# FFMPEG output processing
+	ffmpeg_location: bpy.props.StringProperty(
+		name="FFmpeg location",
+		description="System location where the the FFmpeg command line interface is installed",
+		default="/opt/local/bin/ffmpeg",
+		maxlen=4096)
+#		maxlen=4096,
+#		update=lambda self, context: self.update_ffmpeg_location())
+	ffmpeg_location_previous: bpy.props.StringProperty(default="")
+	ffmpeg_exists: bpy.props.BoolProperty(
+		name="FFmpeg exists",
+		description='Stores the existance of FFmpeg at the defined system location',
+		default=False)
+	
+	# This is probably the proper way to do things, but it's not automatically triggered on plugin enable, and therefore if the plugin ships with a valid location...it won't be recognised until after changing it
+	def update_ffmpeg_location(self):
+		if self.ffmpeg_location != self.ffmpeg_location_previous:
+			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
+#			print("FFmpeg status: "+str(self.ffmpeg_exists))
+			self.ffmpeg_location_previous = self.ffmpeg_location
+	
 	# User Interface
 	def draw(self, context):
 		layout = self.layout
@@ -576,20 +600,19 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		
 	# Render Time:
 		layout.separator()
-#		layout.label(text="")
 		layout.label(text="Render Time:")
 		
 		grid1 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid1.prop(self, "show_total_render_time")
 		input = grid1.row()
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_total_render_time:
+		if not self.show_total_render_time:
 			input.active = False
 			input.enabled = False
 		input.prop(context.scene.autosave_render_settings, 'total_render_time')
 		
 		grid1.prop(self, "external_render_time")
 		input1 = grid1.row()
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
+		if not self.external_render_time:
 			input1.active = False
 			input1.enabled = False
 		input1.prop(self, "external_log_name", text='')
@@ -598,7 +621,6 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		
 	# Global Overrides:
 		layout.separator()
-#		layout.label(text="")
 		layout.label(text="Global Autosave Overrides:")
 		
 		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
@@ -607,7 +629,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 
 		# Disable everything if autosave override isn't engaged
 		group = layout.column()
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
+		if not self.enable_autosave_render_override:
 			group.active = False
 			group.enabled = False
 		
@@ -615,7 +637,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		ops.rendertime = True
 		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid2.separator()
-		if not ((bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM' and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global) or (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override and '{serial}' in bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global)):
+		if not ((self.file_name_override and self.file_name_type_global == 'CUSTOM' and '{serial}' in self.file_name_custom_global) or (self.file_location_override and '{serial}' in self.file_location_global)):
 			grid2.active = False
 			grid2.enabled = False
 		grid2.prop(self, "file_serial_global", text="")
@@ -624,7 +646,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		toggle = grid2.column(align=True)
 		toggle.prop(self, "file_location_override")
 		input = grid2.column(align=True)
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
+		if not self.file_location_override:
 			input.active = False
 			input.enabled = False
 		input.prop(self, "file_location_global", text='')
@@ -633,27 +655,52 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		toggle = grid2.column()
 		toggle.prop(self, "file_name_override")
 		col = grid2.column()
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
+		if not self.file_name_override:
 			col.active = False
 			col.enabled = False
 		input = col.row()
 		input.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
 		input = col.row()
-		if (bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global == 'CUSTOM'):
+		if (self.file_name_type_global == 'CUSTOM'):
 #			input.active = False
 #			input.enabled = False
 			input.prop(self, "file_name_custom_global", text='')
 		
 		grid2.prop(self, "file_format_override")
 		input = grid2.column()
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
+		if not self.file_format_override:
 			input.active = False
 			input.enabled = False
 		input.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
-		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override and bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
+		if self.file_format_override and self.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
 			error = group.box()
 			error.label(text="Python API can only save single layer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
+			
+	# FFmpeg Sequencing
+		layout.separator()
+		layout.label(text="FFmpeg Installation Location:")
+		
+		# Layout and location entry
+		grid3 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid3.prop(self, "ffmpeg_location", text="")
+		
+		# Set up feedback box
+		box3 = grid3.box()
+		
+		# Check if value has changed, if it has, check for valid installation
+		if self.ffmpeg_location != self.ffmpeg_location_previous:
+			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
+#			print("FFmpeg status: "+str(self.ffmpeg_exists))
+			self.ffmpeg_location_previous = self.ffmpeg_location
+		
+		# Provide feedback in box layout
+		if self.ffmpeg_exists:
+			box3.label(text="✔︎ location confirmed")
+		else:
+			box3.label(text="✘ incorrect location")
+
+
 
 ###########################################################################
 # Individual project settings
