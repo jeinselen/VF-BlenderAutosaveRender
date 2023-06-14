@@ -573,20 +573,23 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		name="FFmpeg location",
 		description="System location where the the FFmpeg command line interface is installed",
 		default="/opt/local/bin/ffmpeg",
-		maxlen=4096)
-#		maxlen=4096,
-#		update=lambda self, context: self.update_ffmpeg_location())
+		maxlen=4096,
+		update=lambda self, context: self.update_ffmpeg_location())
 	ffmpeg_location_previous: bpy.props.StringProperty(default="")
 	ffmpeg_exists: bpy.props.BoolProperty(
 		name="FFmpeg exists",
 		description='Stores the existance of FFmpeg at the defined system location',
 		default=False)
 	
-	# This is probably the proper way to do things, but it's not automatically triggered on plugin enable, and therefore if the plugin ships with a valid location...it won't be recognised until after changing it
+	# Validate the ffmpeg location string on value change and plugin registration
 	def update_ffmpeg_location(self):
+		# Ensure it points at ffmpeg
+		if not self.ffmpeg_location.endswith('ffmpeg'):
+			self.ffmpeg_location = self.ffmpeg_location + 'ffmpeg'
+		# Test if it's a valid path
 		if self.ffmpeg_location != self.ffmpeg_location_previous:
 			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
-#			print("FFmpeg status: "+str(self.ffmpeg_exists))
+			print("FFmpeg status: "+str(self.ffmpeg_exists))
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# User Interface
@@ -681,20 +684,14 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		layout.separator()
 		layout.label(text="FFmpeg Installation Location:")
 		
-		# Layout and location entry
+		# Layout
 		grid3 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		
+		# Location entry field
 		grid3.prop(self, "ffmpeg_location", text="")
 		
-		# Set up feedback box
+		# Location exists success/fail
 		box3 = grid3.box()
-		
-		# Check if value has changed, if it has, check for valid installation
-		if self.ffmpeg_location != self.ffmpeg_location_previous:
-			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
-#			print("FFmpeg status: "+str(self.ffmpeg_exists))
-			self.ffmpeg_location_previous = self.ffmpeg_location
-		
-		# Provide feedback in box layout
 		if self.ffmpeg_exists:
 			box3.label(text="✔︎ location confirmed")
 		else:
@@ -1009,6 +1006,8 @@ def register():
 	bpy.types.RENDER_PT_output.prepend(RENDER_PT_output_path_variable_list)
 	bpy.types.RENDER_PT_output.append(RENDER_PT_total_render_time_display)
 	bpy.types.NODE_PT_active_node_properties.prepend(NODE_PT_output_path_variable_list)
+	## Update FFmpeg location
+	bpy.context.preferences.addons[__name__].preferences.update_ffmpeg_location()
 
 def unregister():
 	for cls in reversed(classes):
