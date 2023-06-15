@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 7),
+	"version": (2, 1, 8),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -237,7 +237,7 @@ def autosave_render(scene):
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
 	
-	# Set estimated render time active to false (render is complete or canceled, estimate display is no longer needed)
+	# Set estimated render time active to false (render is complete or canceled, estimate display and FFmpeg check is no longer needed)
 	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
 	
 	# Restore unprocessed file path if processing is enabled
@@ -263,144 +263,143 @@ def autosave_render(scene):
 						if slot:
 							slot.path = slot_data.get("path", slot.path)
 	
-	# Stop here if autosave output is disabled (side effect: render log is also prevented)
-	if not (bpy.context.scene.autosave_render_settings.enable_autosave_render or bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override) or not bpy.data.filepath:
-		return {'CANCELLED'}
-	
-	# Save original file format settings
-	original_format = scene.render.image_settings.file_format
-	original_colormode = scene.render.image_settings.color_mode
-	original_colordepth = scene.render.image_settings.color_depth
-	
-	# Set up render output formatting with override
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
-		file_format = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global
-	else:
-		file_format = bpy.context.scene.autosave_render_settings.file_format
-	
-	if file_format == 'SCENE':
-		if original_format not in IMAGE_FORMATS:
-			print('VF Autosave Render: {} is not an image format. Image not saved.'.format(original_format))
-			return {'ERROR'}
-	elif file_format == 'JPEG':
-		scene.render.image_settings.file_format = 'JPEG'
-	elif file_format == 'PNG':
-		scene.render.image_settings.file_format = 'PNG'
-	elif file_format == 'OPEN_EXR':
-		scene.render.image_settings.file_format = 'OPEN_EXR'
-	extension = scene.render.file_extension
-	
-	# Get project name
+	# Get project name (used by both autosave render and the external log file)
 	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
 	
-	# Get location variable with override and project path replacement
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
-		filepath = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global
-	else:
-		filepath = bpy.context.scene.autosave_render_settings.file_location
-	
-	# If the file path contains one or fewer characters, replace it with the project path
-	if len(filepath) <= 1:
-		filepath = os.path.join(os.path.dirname(bpy.data.filepath), projectname)
+	# Autosave render
+	if (bpy.context.scene.autosave_render_settings.enable_autosave_render or bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override) and bpy.data.filepath:
 		
-	# Convert relative path into absolute path for Python compatibility
-	filepath = bpy.path.abspath(filepath)
-	
-	# Process elements that aren't available in the global variable replacement
-	# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
-	serialUsedGlobal = False
-	serialUsed = False
-	filepath = filepath.replace("{rendertime}", str(render_time) + 's')
-	if '{serial}' in filepath:
+		# Save original file format settings
+		original_format = scene.render.image_settings.file_format
+		original_colormode = scene.render.image_settings.color_mode
+		original_colordepth = scene.render.image_settings.color_depth
+		
+		# Set up render output formatting with override
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_override:
+			file_format = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_format_global
+		else:
+			file_format = bpy.context.scene.autosave_render_settings.file_format
+		
+		if file_format == 'SCENE':
+			if original_format not in IMAGE_FORMATS:
+				print('VF Autosave Render: {} is not an image format. Image not saved.'.format(original_format))
+				return {'ERROR'}
+		elif file_format == 'JPEG':
+			scene.render.image_settings.file_format = 'JPEG'
+		elif file_format == 'PNG':
+			scene.render.image_settings.file_format = 'PNG'
+		elif file_format == 'OPEN_EXR':
+			scene.render.image_settings.file_format = 'OPEN_EXR'
+		extension = scene.render.file_extension
+		
+		# Get location variable with override and project path replacement
 		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
-			filepath = filepath.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
-			serialUsedGlobal = True
+			filepath = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_global
 		else:
-			filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
-			serialUsed = True
-	
-	# Replace global variables in the output name string
-	filepath = replaceVariables(filepath)
-	
-	# Create the project subfolder if it doesn't already exist (otherwise subsequent operations will fail)
-	if not os.path.exists(filepath):
-		os.makedirs(filepath)
-	
-	# Get file name type with override
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
-		file_name_type = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global
-	else:
-		file_name_type = bpy.context.scene.autosave_render_settings.file_name_type
-	
-	# Create the output file name string
-	if file_name_type == 'SERIAL':
-		# Generate dynamic serial number
-		# Finds all of the image files that start with projectname in the selected directory
-		files = [f for f in os.listdir(filepath)
-				if f.startswith(projectname)
-				and f.lower().endswith(IMAGE_EXTENSIONS)]
+			filepath = bpy.context.scene.autosave_render_settings.file_location
 		
-		# Searches the file collection and returns the next highest number as a 4 digit string
-		def save_number_from_files(files):
-			highest = -1
-			if files:
-				for f in files:
-					# find filenames that end with four or more digits
-					suffix = findall(r'\d{4,}$', os.path.splitext(f)[0].split(projectname)[-1], multiline)
-					if suffix:
-						if int(suffix[-1]) > highest:
-							highest = int(suffix[-1])
-			return format(highest+1, '04')
+		# If the file path contains one or fewer characters, replace it with the project path
+		if len(filepath) <= 1:
+			filepath = os.path.join(os.path.dirname(bpy.data.filepath), projectname)
+			
+		# Convert relative path into absolute path for Python compatibility
+		filepath = bpy.path.abspath(filepath)
 		
-		# Create string with serial number
-		filename = '{project}-' + save_number_from_files(files)
-	elif file_name_type == 'DATE':
-		filename = '{project} {date} {time}'
-	elif file_name_type == 'RENDER':
-		# Render time is not availble in the global variable replacement becuase it's computed in the above section of code, not universally available
-		filename = '{project} {renderengine} ' + str(render_time)
-	else:
-		# Load custom file name with override
+		# Process elements that aren't available in the global variable replacement
+		# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
+		serialUsedGlobal = False
+		serialUsed = False
+		filepath = filepath.replace("{rendertime}", str(render_time) + 's')
+		if '{serial}' in filepath:
+			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
+				filepath = filepath.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
+				serialUsedGlobal = True
+			else:
+				filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+				serialUsed = True
+		
+		# Replace global variables in the output name string
+		filepath = replaceVariables(filepath)
+		
+		# Create the project subfolder if it doesn't already exist (otherwise subsequent operations will fail)
+		if not os.path.exists(filepath):
+			os.makedirs(filepath)
+		
+		# Get file name type with override
 		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
-			filename = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global
+			file_name_type = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global
 		else:
-			filename = bpy.context.scene.autosave_render_settings.file_name_custom
-	
-	filename = filename.replace("{rendertime}", str(render_time) + 's')
-	if '{serial}' in filename:
-		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
-			filename = filename.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
-			serialUsedGlobal = True
+			file_name_type = bpy.context.scene.autosave_render_settings.file_name_type
+		
+		# Create the output file name string
+		if file_name_type == 'SERIAL':
+			# Generate dynamic serial number
+			# Finds all of the image files that start with projectname in the selected directory
+			files = [f for f in os.listdir(filepath)
+					if f.startswith(projectname)
+					and f.lower().endswith(IMAGE_EXTENSIONS)]
+			
+			# Searches the file collection and returns the next highest number as a 4 digit string
+			def save_number_from_files(files):
+				highest = -1
+				if files:
+					for f in files:
+						# find filenames that end with four or more digits
+						suffix = findall(r'\d{4,}$', os.path.splitext(f)[0].split(projectname)[-1], multiline)
+						if suffix:
+							if int(suffix[-1]) > highest:
+								highest = int(suffix[-1])
+				return format(highest+1, '04')
+			
+			# Create string with serial number
+			filename = '{project}-' + save_number_from_files(files)
+		elif file_name_type == 'DATE':
+			filename = '{project} {date} {time}'
+		elif file_name_type == 'RENDER':
+			# Render time is not availble in the global variable replacement becuase it's computed in the above section of code, not universally available
+			filename = '{project} {renderengine} ' + str(render_time)
 		else:
-			filename = filename.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
-			serialUsed = True
+			# Load custom file name with override
+			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
+				filename = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_custom_global
+			else:
+				filename = bpy.context.scene.autosave_render_settings.file_name_custom
+		
+		filename = filename.replace("{rendertime}", str(render_time) + 's')
+		if '{serial}' in filename:
+			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
+				filename = filename.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
+				serialUsedGlobal = True
+			else:
+				filename = filename.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+				serialUsed = True
+		
+		# Finish local and global serial number updates
+		if serialUsedGlobal:
+			bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global += 1
+		if serialUsed:
+			bpy.context.scene.autosave_render_settings.file_serial += 1
+		
+		# Replace global variables in the output name string
+		filename = replaceVariables(filename)
+		
+		# Combine file path and file name using system separator, add extension
+		filepath = os.path.join(filepath, filename) + extension
+		
+		# Save image file
+		image = bpy.data.images['Render Result']
+		if not image:
+			print('VF Autosave Render: Render Result not found. Image not saved.')
+			return
+		
+		# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
+		image.save_render(filepath, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
+		
+		# Restore original user settings for render output
+		scene.render.image_settings.file_format = original_format
+		scene.render.image_settings.color_mode = original_colormode
+		scene.render.image_settings.color_depth = original_colordepth
 	
-	# Finish local and global serial number updates
-	if serialUsedGlobal:
-		bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global += 1
-	if serialUsed:
-		bpy.context.scene.autosave_render_settings.file_serial += 1
-	
-	# Replace global variables in the output name string
-	filename = replaceVariables(filename)
-	
-	# Combine file path and file name using system separator, add extension
-	filepath = os.path.join(filepath, filename) + extension
-	
-	# Save image file
-	image = bpy.data.images['Render Result']
-	if not image:
-		print('VF Autosave Render: Render Result not found. Image not saved.')
-		return
-	
-	# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
-	image.save_render(filepath, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
-	
-	# Restore original user settings for render output
-	scene.render.image_settings.file_format = original_format
-	scene.render.image_settings.color_mode = original_colormode
-	scene.render.image_settings.color_depth = original_colordepth
-
 	# Save external log file
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
 		# Log file settings
