@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 0),
+	"version": (2, 2, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -69,6 +69,7 @@ variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collectio
 def autosave_render_start(scene):
 	# Set video sequence tracking (separate from render active below)
 	bpy.context.scene.autosave_render_settings.autosave_video_sequence = False
+	bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = False
 	
 	# Set estimated render time active to false (must render at least one frame before estimating time remaining)
 	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
@@ -185,7 +186,7 @@ def autosave_render(scene):
 		
 		# ProRes output
 		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
-			print('output ProRes video')
+			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
 			# Image sequence pattern
@@ -209,7 +210,7 @@ def autosave_render(scene):
 		
 		# MP4 output
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
-			print('output MP4 video')
+			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
 			# Image sequence pattern
@@ -233,7 +234,7 @@ def autosave_render(scene):
 		
 		# Custom output
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
-			print('output custom video')
+			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location + ' ' + bpy.context.scene.autosave_render_settings.autosave_video_custom_command
 			# Replace variables
@@ -249,6 +250,7 @@ def autosave_render(scene):
 	
 	# Set video sequence status to false
 	bpy.context.scene.autosave_render_settings.autosave_video_sequence = False
+	bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = False
 	
 	# Restore unprocessed file path if processing is enabled
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
@@ -685,7 +687,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Test if it's a valid path
 		if self.ffmpeg_location != self.ffmpeg_location_previous:
 			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
-			print("FFmpeg status: "+str(self.ffmpeg_exists))
+#			print("FFmpeg status: "+str(self.ffmpeg_exists))
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# User Interface
@@ -887,6 +889,10 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	autosave_video_sequence: bpy.props.BoolProperty(
 		name="Sequence Active",
 		description="Indicates if a sequence is being rendering to ensure FFmpeg is enabled only when more than one frame has been rendered",
+		default=False)
+	autosave_video_sequence_processing: bpy.props.BoolProperty(
+		name="Sequence Processing",
+		description="Indicates if sequence processing is currently active",
 		default=False)
 	
 	autosave_video_prores: bpy.props.BoolProperty(
@@ -1266,13 +1272,18 @@ def RENDER_PT_total_render_time_display(self, context):
 		box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.autosave_render_settings.total_render_time))
 
 ###########################################################################
-# Display estimated render time remaining in the Image viewer
-		
-def estimated_render_time(self, context):
+# Display feedback in the Image viewer (primarily during rendering)
+
+def image_viewer_feedback_display(self, context):
+	# Estimated render time remaining
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.remaining_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
 		self.layout.separator()
 		box = self.layout.box()
-		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.autosave_render_settings.estimated_render_time_value + "")
+		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.autosave_render_settings.estimated_render_time_value + " ")
+	if bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing:
+		self.layout.separator()
+		box = self.layout.box()
+		box.label(text="  FFmpeg Image Sequence Processing... ")
 
 ###########################################################################
 # Addon registration functions
@@ -1293,7 +1304,7 @@ def register():
 	bpy.app.handlers.render_cancel.append(autosave_render)
 	bpy.app.handlers.render_complete.append(autosave_render)
 	# Render estimate display
-	bpy.types.IMAGE_MT_editor_menus.append(estimated_render_time)
+	bpy.types.IMAGE_MT_editor_menus.append(image_viewer_feedback_display)
 	# Variable info popup
 	bpy.types.RENDER_PT_output.prepend(RENDER_PT_output_path_variable_list)
 	bpy.types.RENDER_PT_output.append(RENDER_PT_total_render_time_display)
@@ -1315,7 +1326,7 @@ def unregister():
 	bpy.app.handlers.render_cancel.remove(autosave_render)
 	bpy.app.handlers.render_complete.remove(autosave_render)
 	# Render estimate display
-	bpy.types.IMAGE_MT_editor_menus.remove(estimated_render_time)
+	bpy.types.IMAGE_MT_editor_menus.remove(image_viewer_feedback_display)
 	# Variable info popup
 	bpy.types.RENDER_PT_output.remove(RENDER_PT_output_path_variable_list)
 	bpy.types.RENDER_PT_output.remove(RENDER_PT_total_render_time_display)
