@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 3),
+	"version": (2, 1, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -320,7 +320,7 @@ def autosave_render(scene):
 		file_name_type = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_type_global
 	else:
 		file_name_type = bpy.context.scene.autosave_render_settings.file_name_type
-
+	
 	# Create the output file name string
 	if file_name_type == 'SERIAL':
 		# Generate dynamic serial number
@@ -381,10 +381,10 @@ def autosave_render(scene):
 	if not image:
 		print('VF Autosave Render: Render Result not found. Image not saved.')
 		return
-
+	
 	# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
 	image.save_render(filepath, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
-
+	
 	# Restore original user settings for render output
 	scene.render.image_settings.file_format = original_format
 	scene.render.image_settings.color_mode = original_colormode
@@ -398,7 +398,7 @@ def autosave_render(scene):
 		logpath = os.path.join(os.path.dirname(bpy.data.filepath), logname) # Limited to locations local to the project file
 		logtitle = 'Total Render Time: '
 		logtime = 0.00
-
+		
 		# Get previous time spent rendering, if log file exists, and convert formatted string into seconds
 		if os.path.exists(logpath):
 			with open(logpath) as filein:
@@ -407,17 +407,17 @@ def autosave_render(scene):
 		# Create log file directory location if it doesn't exist
 		elif not os.path.exists(os.path.dirname(logpath)): # Safety net just in case a folder was included in the file name entry
 			os.makedirs(os.path.dirname(logpath))
-
+		
 		# Add the latest render time
 		logtime += float(render_time)
-
+		
 		# Convert seconds into formatted string
 		logtime = secondsToReadable(logtime)
-
+		
 		# Write log file
 		with open(logpath, 'w') as fileout:
 			fileout.write(logtitle + logtime)
-
+	
 	return {'FINISHED'}
 
 ###########################################################################
@@ -984,6 +984,10 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 	# def poll(cls, context):
 		# return (context.engine in cls.compatible_render_engines)
 	
+	@classmethod
+	def poll(cls, context):
+		return True
+	
 	def draw_header(self, context):
 		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
 			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_render', text='')
@@ -1051,6 +1055,8 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 			error = layout.box()
 			error.label(text="Python API can only save single layer EXR files")
 			error.label(text="Report: https://developer.blender.org/T71087")
+
+
 
 ###########################################################################
 # Variable info popup and serial number UI
@@ -1152,7 +1158,7 @@ def NODE_PT_output_path_variable_list(self, context):
 
 ###########################################################################
 # Display render time in the Render panel
-		
+
 def RENDER_PT_total_render_time_display(self, context):
 	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_total_render_time:
 		layout = self.layout
