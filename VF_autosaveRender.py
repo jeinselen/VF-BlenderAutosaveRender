@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 2),
+	"version": (2, 2, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -183,7 +183,30 @@ def autosave_render(scene):
 		
 		# ProRes output
 		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
+			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
+			# Set up output path
+			output_path = absolute_path
+			if len(bpy.context.scene.autosave_render_settings.autosave_video_prores_location) > 1:
+				# Replace with custom string
+				output_path = bpy.context.scene.autosave_render_settings.autosave_video_prores_location
+				# Replace render time variable
+				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
+				# Check if the serial variable is used
+				if '{serial}' in output_path:
+					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
+					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
+				# Replace the rest of the variables
+				output_path = replaceVariables(output_path)
+				# Convert relative path into absolute path for Python and CLI compatibility
+				output_path = bpy.path.abspath(output_path)
+				# Create the project subfolder if it doesn't already exist
+				output_dir = sub(r'[^/]*$', "", output_path)
+				if not os.path.exists(output_dir):
+					os.makedirs(output_dir)
+				# Wrap with FFmpeg settings
+				output_path = '-y "' + output_path + '"'
+			
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
 			# Image sequence pattern
@@ -197,7 +220,7 @@ def autosave_render(scene):
 			# Final output settings
 			ffmpeg_command += ' -vendor apl0 -an -sn'
 			# Output file path
-			ffmpeg_command += ' ' + absolute_path + '.mov'
+			ffmpeg_command += ' ' + output_path + '.mov'
 			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
@@ -207,7 +230,30 @@ def autosave_render(scene):
 		
 		# MP4 output
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
+			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
+			# Set up output path
+			output_path = absolute_path
+			if len(bpy.context.scene.autosave_render_settings.autosave_video_mp4_location) > 1:
+				# Replace with custom string
+				output_path = bpy.context.scene.autosave_render_settings.autosave_video_mp4_location
+				# Replace render time variable
+				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
+				# Check if the serial variable is used
+				if '{serial}' in output_path:
+					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
+					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
+				# Replace the rest of the variables
+				output_path = replaceVariables(output_path)
+				# Convert relative path into absolute path for Python and CLI compatibility
+				output_path = bpy.path.abspath(output_path)
+				# Create the project subfolder if it doesn't already exist
+				output_dir = sub(r'[^/]*$', "", output_path)
+				if not os.path.exists(output_dir):
+					os.makedirs(output_dir)
+				# Wrap with FFmpeg settings
+				output_path = '-y "' + output_path + '"'
+			
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
 			# Image sequence pattern
@@ -221,7 +267,7 @@ def autosave_render(scene):
 			# Final output settings
 			ffmpeg_command += ' -pix_fmt yuv420p -movflags rtphint'
 			# Output file path
-			ffmpeg_command += ' ' + absolute_path + '.mp4'
+			ffmpeg_command += ' ' + output_path + '.mp4'
 			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
@@ -231,13 +277,36 @@ def autosave_render(scene):
 		
 		# Custom output
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
+			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
+			# Set up output path
+			output_path = absolute_path
+			if len(bpy.context.scene.autosave_render_settings.autosave_video_custom_location) > 1:
+				# Replace with custom string
+				output_path = bpy.context.scene.autosave_render_settings.autosave_video_custom_location
+				# Replace render time variable
+				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
+				# Check if the serial variable is used
+				if '{serial}' in output_path:
+					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
+					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
+				# Replace the rest of the variables
+				output_path = replaceVariables(output_path)
+				# Convert relative path into absolute path for Python and CLI compatibility
+				output_path = bpy.path.abspath(output_path)
+				# Create the project subfolder if it doesn't already exist
+				output_dir = sub(r'[^/]*$', "", output_path)
+				if not os.path.exists(output_dir):
+					os.makedirs(output_dir)
+				# Wrap with FFmpeg settings
+				output_path = '-y "' + output_path + '"'
+			
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location + ' ' + bpy.context.scene.autosave_render_settings.autosave_video_custom_command
 			# Replace variables
 			ffmpeg_command = ffmpeg_command.replace("{fps}", fps_float)
 			ffmpeg_command = ffmpeg_command.replace("{input}", glob_pattern)
-			ffmpeg_command = ffmpeg_command.replace("{output}", absolute_path)
+			ffmpeg_command = ffmpeg_command.replace("{output}", output_path)
 			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
@@ -245,7 +314,7 @@ def autosave_render(scene):
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
 	
-	# Increment the output serial number if it was used once or more
+	# Increment the output serial number if it was used any output path
 	if bpy.context.scene.autosave_render_settings.output_file_serial_used:
 		bpy.context.scene.autosave_render_settings.output_file_serial += 1
 	
@@ -948,13 +1017,16 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	autosave_video_custom_command: bpy.props.StringProperty(
 		name="Custom FFmpeg Command",
 		description="Custom FFmpeg command line string; {input} {fps} {output} variables must be included, but the command path is automatically prepended",
-		default='{input} {fps} -c:v hevc_videotoolbox -require_sw 1 -allow_sw 1 -alpha_quality 1.0 -vtag hvc1 {output}_alpha.mov',
+		default='{input} {fps} -vf scale=-2:1080 -c:v libx264 -preset medium -crf 10 -pix_fmt yuv420p -movflags +rtphint -movflags +faststart {output}_1080p.mp4',
+				#{input} {fps} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 {output}_alpha.mov
+				#{input} {fps} -c:v hevc_videotoolbox -require_sw 1 -allow_sw 1 -alpha_quality 1.0 -vtag hvc1 {output}_alpha.mov
 				#{input} {fps} -pix_fmt yuva420p {output}_alpha.webm
+				#{input} {fps} -c:v libvpx -pix_fmt yuva420p -crf 16 -b:v 1M -auto-alt-ref 0 {output}_alpha.webm
 		maxlen=4096)
 	autosave_video_custom_location: bpy.props.StringProperty(
 		name="Custom File Location",
 		description="Set custom command file output location and name, use single forward slash to save alongside image sequence",
-		default="//../Exports/{project}",
+		default="/",
 		maxlen=4096,
 		subtype="DIR_PATH")
 
@@ -996,39 +1068,54 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
 		ops.rendertime = True
 		
-		columns = layout.row(align=True)
-		col1 = columns.column(align=True)
-		col1.scale_x = 0.625
-		col2 = columns.column(align=True)
+		# Display serial number if used in any enabled FFmpeg output paths
+		paths = ''
+		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
+			paths += bpy.context.scene.autosave_render_settings.autosave_video_prores_location
+		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
+			paths += bpy.context.scene.autosave_render_settings.autosave_video_mp4_location
+		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
+			paths += bpy.context.scene.autosave_render_settings.autosave_video_custom_location
+		input = layout.row()
+		input.use_property_split = True
+		if not '{serial}' in paths:
+			input.active = False
+			input.enabled = False
+		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
 		
-		# ProRes
-		col1.prop(context.scene.autosave_render_settings, 'autosave_video_prores', text='ProRes')
-		options = col2.row()
-		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
-			options.active = False
-			options.enabled = False
-		quality = options.row()
-		quality.scale_x = 0.25
-		quality.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', expand=True)
-		options.prop(context.scene.autosave_render_settings, 'autosave_video_prores_location', text='')
-		
-		# MP4
-		col1.prop(context.scene.autosave_render_settings, 'autosave_video_mp4', text='MP4')
-		options = col2.row()
-		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
-			options.active = False
-			options.enabled = False
-		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality', slider=True)
-		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_location', text='')
-		
-		# Custom command string
-		col1.prop(context.scene.autosave_render_settings, 'autosave_video_custom', text='Custom')
-		options = col2.row()
-		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
-			options.active = False
-			options.enabled = False
-		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
-		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_location', text='')
+#		columns = layout.row(align=True)
+#		col1 = columns.column(align=True)
+#		col1.scale_x = 0.625
+#		col2 = columns.column(align=True)
+#		
+#		# ProRes
+#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_prores', text='ProRes')
+#		options = col2.row()
+#		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
+#			options.active = False
+#			options.enabled = False
+#		quality = options.row()
+#		quality.scale_x = 0.25
+#		quality.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', expand=True)
+#		options.prop(context.scene.autosave_render_settings, 'autosave_video_prores_location', text='')
+#		
+#		# MP4
+#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_mp4', text='MP4')
+#		options = col2.row()
+#		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
+#			options.active = False
+#			options.enabled = False
+#		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality', slider=True)
+#		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_location', text='')
+#		
+#		# Custom command string
+#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_custom', text='Custom')
+#		options = col2.row()
+#		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
+#			options.active = False
+#			options.enabled = False
+#		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
+#		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_location', text='')
 		
 		# ProRes alternate UI
 		layout.separator()
