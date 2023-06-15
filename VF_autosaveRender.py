@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 6),
+	"version": (2, 1, 7),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -155,9 +155,6 @@ def autosave_render_estimate(scene):
 
 @persistent
 def autosave_render(scene):
-	# Set estimated render time active to false (render is complete or canceled, estimate display is no longer needed)
-	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
-	
 	# Calculate elapsed render time
 	render_time = round(time.time() - float(bpy.context.scene.autosave_render_settings.start_date), 2)
 	
@@ -165,7 +162,8 @@ def autosave_render(scene):
 	bpy.context.scene.autosave_render_settings.total_render_time = bpy.context.scene.autosave_render_settings.total_render_time + render_time
 	
 	# Output video files if FFmpeg processing is enabled, the command appears to exist, and the image format output is supported
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS:
+	# Note the usage of estimated_render_time_active to tell if a sequence has been rendered or only a single frame
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
 		# Create initial command base
 		ffmpeg_location = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
 		# Create absolute path (strip trailing spaces to clean up output files)
@@ -238,6 +236,9 @@ def autosave_render(scene):
 			print('Custom command: ' + ffmpeg_command)
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
+	
+	# Set estimated render time active to false (render is complete or canceled, estimate display is no longer needed)
+	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
 	
 	# Restore unprocessed file path if processing is enabled
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
