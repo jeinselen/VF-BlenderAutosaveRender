@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 10),
+	"version": (2, 1, 11),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -181,17 +181,17 @@ def autosave_render(scene):
 		# Force overwrite and include quotations
 		absolute_path = '-y "' + absolute_path + '"'
 		# Create floating point FPS value
-		fps_float = str(scene.render.fps / scene.render.fps_base)
+		fps_float = '-r ' + str(scene.render.fps / scene.render.fps_base)
 		
 		# ProRes output
 		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
 			print('output ProRes video')
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
-			# Frame rate
-			ffmpeg_command += ' -r ' + fps_float
 			# Image sequence pattern
 			ffmpeg_command += ' ' + glob_pattern
+			# Frame rate
+			ffmpeg_command += ' ' + fps_float
 			# ProRes format
 			ffmpeg_command += ' -c:v prores -pix_fmt yuv422p10le'
 			# ProRes profile (Proxy, LT, 422 HQ)
@@ -212,10 +212,10 @@ def autosave_render(scene):
 			print('output MP4 video')
 			# FFmpeg location
 			ffmpeg_command = ffmpeg_location
-			# Frame rate
-			ffmpeg_command += ' -r ' + fps_float
 			# Image sequence pattern
 			ffmpeg_command += ' ' + glob_pattern
+			# Frame rate
+			ffmpeg_command += ' ' + fps_float
 			# MP4 format
 			ffmpeg_command += ' -c:v libx264 -preset slow'
 			# MP4 quality (0-51 from highest to lowest quality)
@@ -922,7 +922,8 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	autosave_video_custom_command: bpy.props.StringProperty(
 		name="Custom FFmpeg Command",
 		description="Custom FFmpeg command line string; {input} {fps} {output} variables must be included, but the command path is automatically prepended",
-		default='{input} -r {fps} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 {output}_alpha.mov',
+		default='{input} {fps} -c:v hevc_videotoolbox -require_sw 1 -allow_sw 1 -alpha_quality 1.0 -vtag hvc1 {output}_alpha.mov',
+				#{input} {fps} -pix_fmt yuva420p {output}_alpha.webm
 		maxlen=4096)
 	
 	
