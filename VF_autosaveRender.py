@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 5),
+	"version": (2, 1, 6),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -166,20 +166,24 @@ def autosave_render(scene):
 	
 	# Output video files if FFmpeg processing is enabled, the command appears to exist, and the image format output is supported
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS:
-		# Create absolute path
-		absolute_path = bpy.path.abspath(scene.render.filepath)
+		# Create initial command base
+		ffmpeg_location = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
+		# Create absolute path (strip trailing spaces to clean up output files)
+		absolute_path = bpy.path.abspath(scene.render.filepath).rstrip()
 		# Create input image glob pattern
-		glob_pattern = absolute_path + '*' + scene.render.file_extension
+		glob_pattern = '-pattern_type glob -i "' + absolute_path + '*' + scene.render.file_extension + '"'
+		# Create floating point FPS value
+		fps_float = str(scene.render.fps / scene.render.fps_base)
 		
 		# ProRes output
 		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
 			print('output ProRes video')
 			# FFmpeg location
-			ffmpeg_command = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
+			ffmpeg_command = ffmpeg_location
 			# Frame rate
-			ffmpeg_command += ' -r ' + str(scene.render.fps / scene.render.fps_base)
+			ffmpeg_command += ' -r ' + fps_float
 			# Image sequence pattern
-			ffmpeg_command += ' -pattern_type glob -i "' + glob_pattern + '"'
+			ffmpeg_command += ' ' + glob_pattern
 			# ProRes format
 			ffmpeg_command += ' -c:v prores -pix_fmt yuv422p10le'
 			# ProRes profile (Proxy, LT, 422 HQ)
@@ -188,46 +192,47 @@ def autosave_render(scene):
 			ffmpeg_command += ' -vendor apl0 -an -sn'
 			# Output file path
 			ffmpeg_command += ' -y "' + absolute_path + '.mov"'
+			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('ProRes command: ' + ffmpeg_command)
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
+		
 		# MP4 output
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
 			print('output MP4 video')
 			# FFmpeg location
-			ffmpeg_command = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
+			ffmpeg_command = ffmpeg_location
 			# Frame rate
-			ffmpeg_command += ' -r ' + str(scene.render.fps / scene.render.fps_base)
+			ffmpeg_command += ' -r ' + fps_float
 			# Image sequence pattern
-			ffmpeg_command += ' -pattern_type glob -i "' + glob_pattern + '"'
+			ffmpeg_command += ' ' + glob_pattern
 			# MP4 format
 			ffmpeg_command += ' -c:v libx264 -preset slow'
 			# MP4 quality (0-51 from highest to lowest quality)
-			ffmpeg_command += ' -crf ' + bpy.context.scene.autosave_render_settings.autosave_video_mp4_quality
+			ffmpeg_command += ' -crf ' + str(bpy.context.scene.autosave_render_settings.autosave_video_mp4_quality)
 			# Final output settings
 			ffmpeg_command += ' -pix_fmt yuv420p -movflags rtphint'
 			# Output file path
 			ffmpeg_command += ' -y "' + absolute_path + '.mp4"'
+			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('MP4 command: ' + ffmpeg_command)
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
+		
 		# Custom output
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
 			print('output custom video')
 			# FFmpeg location
-			ffmpeg_command = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
-			# Frame rate
-			ffmpeg_command += ' -r ' + str(scene.render.fps / scene.render.fps_base)
-			# Image sequence pattern
-			ffmpeg_command += ' -pattern_type glob -i ' + sub(r'[0-9]+(\..{3,4})$', '*\\1', scene.render.filepath)
-			# Get custom command string
-			ffmpeg_command += bpy.context.scene.autosave_render_settings.autosave_video_custom_command;
-			# Output file path
-			ffmpeg_command += sub(r'[\s0-9]*(\..{3,4})$', '.mov', scene.render.filepath)
+			ffmpeg_command = ffmpeg_location + ' ' + bpy.context.scene.autosave_render_settings.autosave_video_custom_command
+			# Replace variables
+			ffmpeg_command = ffmpeg_command.replace("{fps}", fps_float)
+			ffmpeg_command = ffmpeg_command.replace("{input}", glob_pattern)
+			ffmpeg_command = ffmpeg_command.replace("{output}", absolute_path)
+			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('Custom command: ' + ffmpeg_command)
@@ -902,8 +907,8 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		default=False)
 	autosave_video_custom_command: bpy.props.StringProperty(
 		name="Custom FFmpeg Command",
-		description="Custom FFmpeg command line string, always includes FFmpeg location, frame rate, input glob, and output",
-		default="-c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 -y",
+		description="Custom FFmpeg command line string; {input} {fps} {output} variables must be included, but the command path is automatically prepended",
+		default='{input} -r {fps} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 "{output}_alpha.mov"',
 		maxlen=4096)
 	
 	
