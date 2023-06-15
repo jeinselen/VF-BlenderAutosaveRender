@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 1),
+	"version": (2, 1, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -17,7 +17,7 @@ import json
 import os
 from pathlib import Path
 import platform
-from re import findall, search, M as multiline
+from re import findall, search, sub, M as multiline
 import time
 # FFmpeg system access
 import subprocess
@@ -48,8 +48,15 @@ IMAGE_EXTENSIONS = (
 	'dpx',
 	'exr',
 	'hdr',
-	'tif'
-)
+	'tif')
+FFMPEG_FORMATS = (
+	'BMP',
+	'PNG',
+	'JPEG',
+	'DPX',
+	'OPEN_EXR_MULTILAYER',
+	'OPEN_EXR',
+	'TIFF')
 
 variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}", "{material}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
@@ -790,9 +797,113 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	output_file_serial: bpy.props.IntProperty(
 		name="Serial Number",
 		description="Current serial number, automatically increments with every render")
+	
+	# FFmpeg image sequence compilation
+	autosave_video_prores: bpy.props.BoolProperty(
+		name="Enable ProRes Output",
+		description="Automatically compiles completed image sequences into a ProRes compressed .mov file",
+		default=False)
+	autosave_video_prores_quality: bpy.props.EnumProperty(
+		name='ProRes Quality',
+		description='Video codec used',
+		items=[
+			('0', 'ProRes Quality Proxy', 'ProResProxy'),
+			('1', 'ProRes Quality LT', 'ProResLT'),
+			('2', 'ProRes Quality 422', 'ProRes422'),
+			('3', 'ProRes Quality HQ', 'ProRes422HQ'),
+			],
+		default='3')
+	autosave_video_mp4: bpy.props.BoolProperty(
+		name="Enable MP4 Output",
+		description="Automatically compiles completed image sequences into an H.264 compressed .mp4 file",
+		default=False)
+	autosave_video_mp4_quality: bpy.props.IntProperty(
+		name="MP4 Quality",
+		description="CRF value where 0 is uncompressed and 51 is the lowest quality possible; 23 is the FFmpeg default but 18 produces better results (closer to visually lossless)",
+		default=18,
+		step=2,
+		soft_min=2,
+		soft_max=48,
+		min=0,
+		max=51)
+	autosave_video_custom: bpy.props.BoolProperty(
+		name="Enable Custom Output",
+		description="Automatically compiles completed image sequences using a custom FFmpeg string",
+		default=False)
+	autosave_video_custom_command: bpy.props.StringProperty(
+		name="Custom FFmpeg Command",
+		description="Custom FFmpeg command line string, always includes FFmpeg location, frame rate, input glob, and output",
+		default="-c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 -y",
+		maxlen=4096)
+	
+	
 
 ###########################################################################
-# UI rendering classes
+# Output Properties panel UI rendering classes
+
+class RENDER_PT_autosave_video(bpy.types.Panel):
+	bl_space_type = 'PROPERTIES'
+	bl_region_type = 'WINDOW'
+	bl_context = "render"
+	bl_label = "Autosave Video"
+	bl_parent_id = "RENDER_PT_output"
+	# bl_options = {'DEFAULT_CLOSED'}
+
+	@classmethod
+	def poll(cls, context):
+		return (
+			# Check if FFmpeg processing is enabled
+			bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing
+			# Check if the FFmpeg appears to be valid
+			and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists
+			# Check if the output format is supported by FFmpeg
+			and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS
+		)
+	
+#	def draw_header(self, context):
+#		self.layout.label(text="Autosave Video")
+#		if bpy.context.scene.render.image_settings.file_format not in FFMPEG_FORMATS:
+#			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_video', text='')
+		
+	def draw(self, context):
+		layout = self.layout
+		layout.use_property_decorate = False  # No animation
+#		layout.use_property_split = True
+		
+		# Disable inputs if FFmpeg processing is disabled
+#		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing:
+#			layout.active = False
+#			layout.enabled = False
+		
+		grid = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		
+		# ProRes
+		grid.prop(context.scene.autosave_render_settings, 'autosave_video_prores')
+		options1 = grid.row()
+		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
+			options1.active = False
+			options1.enabled = False
+		options1.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', text='')
+		
+		# MP4
+		grid.prop(context.scene.autosave_render_settings, 'autosave_video_mp4')
+		options2 = grid.row()
+		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
+			options2.active = False
+			options2.enabled = False
+		options2.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality')
+		
+		# Custom command string
+		grid.prop(context.scene.autosave_render_settings, 'autosave_video_custom')
+		options3 = grid.row()
+		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
+			options3.active = False
+			options3.enabled = False
+		options3.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
+		
+		# Custom command feedback
+#		custom_feedback = layout.box()
+#		custom_feedback.label(text="Custom string feedback goes here")
 
 class RENDER_PT_autosave_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -997,7 +1108,7 @@ def estimated_render_time(self, context):
 ###########################################################################
 # Addon registration functions
 
-classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy)
+classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy)
 
 def register():
 	for cls in classes:
