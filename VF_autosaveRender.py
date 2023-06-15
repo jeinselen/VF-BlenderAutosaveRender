@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 1),
+	"version": (2, 2, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -77,8 +77,9 @@ def autosave_render_start(scene):
 	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.autosave_render_settings.start_date = str(time.time())
 	
-	# Track usage of the global serial number in both file output and output nodes to ensure it's only incremented once
-	serialUsed = False
+	# Track usage of the output serial usage globally to ensure it can be accessed before/after rendering
+	# Set it to false ahead of processing to ensure no errors occur (usually only if there's a crash of some sort)
+	bpy.context.scene.autosave_render_settings.output_file_serial_used = False
 	
 	# Filter output file path if enabled
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
@@ -88,7 +89,7 @@ def autosave_render_start(scene):
 		# Check if the serial variable is used
 		if '{serial}' in filepath:
 			filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
-			serialUsed = True
+			bpy.context.scene.autosave_render_settings.output_file_serial_used = True
 			
 		# Replace scene filepath output with the processed version
 		scene.render.filepath = replaceVariables(filepath)
@@ -108,7 +109,7 @@ def autosave_render_start(scene):
 				# Replace variables
 				if '{serial}' in node.base_path:
 					node.base_path = node.base_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
-					serialUsed = True
+					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
 				node.base_path = replaceVariables(node.base_path)
 				
 				# Save and then process the sub-path property of each file slot
@@ -119,15 +120,11 @@ def autosave_render_start(scene):
 					# Replace variables
 					if '{serial}' in slot.path:
 						slot.path = slot.path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
-						serialUsed = True
+						bpy.context.scene.autosave_render_settings.output_file_serial_used = True
 					slot.path = replaceVariables(slot.path)
 					
 		# Convert the dictionary to JSON format and save to the plugin preferences for safekeeping while rendering
 		bpy.context.scene.autosave_render_settings.output_file_nodes = json.dumps(node_settings)
-		
-	# Increment the serial number if it was used once or more
-	if serialUsed:
-		bpy.context.scene.autosave_render_settings.output_file_serial += 1
 		
 ###########################################################################
 # Render time remaining estimation function
@@ -247,6 +244,10 @@ def autosave_render(scene):
 			print('Custom command: ' + ffmpeg_command)
 			# Run FFmpeg command
 			subprocess.call(ffmpeg_command, shell=True)
+	
+	# Increment the output serial number if it was used once or more
+	if bpy.context.scene.autosave_render_settings.output_file_serial_used:
+		bpy.context.scene.autosave_render_settings.output_file_serial += 1
 	
 	# Set video sequence status to false
 	bpy.context.scene.autosave_render_settings.autosave_video_sequence = False
@@ -884,6 +885,10 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	output_file_serial: bpy.props.IntProperty(
 		name="Serial Number",
 		description="Current serial number, automatically increments with every render")
+	output_file_serial_used: bpy.props.BoolProperty(
+		name="Output Serial Number Used",
+		description="Indicates if any of the output modules use the {serial} variable",
+		default=False)
 	
 	# FFmpeg image sequence compilation
 	autosave_video_sequence: bpy.props.BoolProperty(
