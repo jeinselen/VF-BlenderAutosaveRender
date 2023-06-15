@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 11),
+	"version": (2, 2, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -888,6 +888,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		name="Sequence Active",
 		description="Indicates if a sequence is being rendering to ensure FFmpeg is enabled only when more than one frame has been rendered",
 		default=False)
+	
 	autosave_video_prores: bpy.props.BoolProperty(
 		name="Enable ProRes Output",
 		description="Automatically compiles completed image sequences into a ProRes compressed .mov file",
@@ -896,18 +897,25 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		name='ProRes Quality',
 		description='Video codec used',
 		items=[
-			('0', 'ProRes Quality Proxy', 'ProResProxy'),
-			('1', 'ProRes Quality LT', 'ProResLT'),
-			('2', 'ProRes Quality 422', 'ProRes422'),
-			('3', 'ProRes Quality HQ', 'ProRes422HQ'),
+			('0', 'Proxy', 'ProResProxy'),
+			('1', 'LT', 'ProResLT'),
+			('2', '422', 'ProRes422'),
+			('3', 'HQ', 'ProRes422HQ'),
 			],
 		default='3')
+	autosave_video_prores_location: bpy.props.StringProperty(
+		name="Custom File Location",
+		description="Set ProRes file output location and name, use single forward slash to save alongside image sequence",
+		default="//../Renders/{project}",
+		maxlen=4096,
+		subtype="DIR_PATH")
+	
 	autosave_video_mp4: bpy.props.BoolProperty(
 		name="Enable MP4 Output",
 		description="Automatically compiles completed image sequences into an H.264 compressed .mp4 file",
 		default=False)
 	autosave_video_mp4_quality: bpy.props.IntProperty(
-		name="MP4 Quality",
+		name="Compression Level",
 		description="CRF value where 0 is uncompressed and 51 is the lowest quality possible; 23 is the FFmpeg default but 18 produces better results (closer to visually lossless)",
 		default=18,
 		step=2,
@@ -915,6 +923,13 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		soft_max=48,
 		min=0,
 		max=51)
+	autosave_video_mp4_location: bpy.props.StringProperty(
+		name="Custom File Location",
+		description="Set MP4 file output location and name, use single forward slash to save alongside image sequence",
+		default="//../Previews/{project}",
+		maxlen=4096,
+		subtype="DIR_PATH")
+	
 	autosave_video_custom: bpy.props.BoolProperty(
 		name="Enable Custom Output",
 		description="Automatically compiles completed image sequences using a custom FFmpeg string",
@@ -925,8 +940,14 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		default='{input} {fps} -c:v hevc_videotoolbox -require_sw 1 -allow_sw 1 -alpha_quality 1.0 -vtag hvc1 {output}_alpha.mov',
 				#{input} {fps} -pix_fmt yuva420p {output}_alpha.webm
 		maxlen=4096)
-	
-	
+	autosave_video_custom_location: bpy.props.StringProperty(
+		name="Custom File Location",
+		description="Set custom command file output location and name, use single forward slash to save alongside image sequence",
+		default="//../Exports/{project}",
+		maxlen=4096,
+		subtype="DIR_PATH")
+
+
 
 ###########################################################################
 # Output Properties panel UI rendering classes
@@ -954,47 +975,99 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 #		self.layout.label(text="Autosave Video")
 #		if bpy.context.scene.render.image_settings.file_format not in FFMPEG_FORMATS:
 #			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_video', text='')
-		
+	
 	def draw(self, context):
 		layout = self.layout
 		layout.use_property_decorate = False  # No animation
 #		layout.use_property_split = True
 		
-		# Disable inputs if FFmpeg processing is disabled
-#		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing:
-#			layout.active = False
-#			layout.enabled = False
+		# Variable list popup button
+		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
 		
-		grid = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		columns = layout.row(align=True)
+		col1 = columns.column(align=True)
+		col1.scale_x = 0.625
+		col2 = columns.column(align=True)
 		
 		# ProRes
-		grid.prop(context.scene.autosave_render_settings, 'autosave_video_prores')
-		options1 = grid.row()
+		col1.prop(context.scene.autosave_render_settings, 'autosave_video_prores', text='ProRes')
+		options = col2.row()
 		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
-			options1.active = False
-			options1.enabled = False
-		options1.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', text='')
+			options.active = False
+			options.enabled = False
+		quality = options.row()
+		quality.scale_x = 0.25
+		quality.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', expand=True)
+		options.prop(context.scene.autosave_render_settings, 'autosave_video_prores_location', text='')
 		
 		# MP4
-		grid.prop(context.scene.autosave_render_settings, 'autosave_video_mp4')
-		options2 = grid.row()
+		col1.prop(context.scene.autosave_render_settings, 'autosave_video_mp4', text='MP4')
+		options = col2.row()
 		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
-			options2.active = False
-			options2.enabled = False
-		options2.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality')
+			options.active = False
+			options.enabled = False
+		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality', slider=True)
+		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_location', text='')
 		
 		# Custom command string
-		grid.prop(context.scene.autosave_render_settings, 'autosave_video_custom')
-		options3 = grid.row()
+		col1.prop(context.scene.autosave_render_settings, 'autosave_video_custom', text='Custom')
+		options = col2.row()
 		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
-			options3.active = False
-			options3.enabled = False
-		options3.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
+			options.active = False
+			options.enabled = False
+		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
+		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_location', text='')
 		
-		# Custom command feedback
-#		custom_feedback = layout.box()
-#		custom_feedback.label(text="Custom string feedback goes here")
-
+		# ProRes alternate UI
+		layout.separator()
+		row1 = layout.row()
+		row1a = row1.row()
+		row1a.scale_x = 0.8333
+		row1a.prop(context.scene.autosave_render_settings, 'autosave_video_prores', text='Create ProRes')
+		row1b = row1.row(align=True)
+		row1b.scale_x = 0.25
+		row1b.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', expand=True)
+		row2 = layout.row()
+		row2.prop(context.scene.autosave_render_settings, 'autosave_video_prores_location', text='')
+		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
+			row1b.active = False
+			row1b.enabled = False
+			row2.active = False
+			row2.enabled = False
+		
+		# MP4 alternate UI
+		layout.separator()
+		row1 = layout.row()
+		row1a = row1.row()
+		row1a.scale_x = 0.8333
+		row1a.prop(context.scene.autosave_render_settings, 'autosave_video_mp4', text='Create MP4')
+		row1b = row1.row()
+		row1b.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality', slider=True)
+		row2 = layout.row()
+		row2.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_location', text='')
+		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
+			row1b.active = False
+			row1b.enabled = False
+			row2.active = False
+			row2.enabled = False
+		
+		# Custom alternate UI
+		layout.separator()
+		row1 = layout.row()
+		row1a = row1.row()
+		row1a.scale_x = 0.8333
+		row1a.prop(context.scene.autosave_render_settings, 'autosave_video_custom', text='Create Custom')
+		row1b = row1.row()
+		row1b.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
+		row2 = layout.row()
+		row2.prop(context.scene.autosave_render_settings, 'autosave_video_custom_location', text='')
+		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
+			row1b.active = False
+			row1b.enabled = False
+			row2.active = False
+			row2.enabled = False
+		
 class RENDER_PT_autosave_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
