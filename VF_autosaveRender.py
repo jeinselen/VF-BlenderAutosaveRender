@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 0),
+	"version": (2, 1, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -569,6 +569,10 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		default='JPEG')
 	
 	# FFMPEG output processing
+	ffmpeg_processing: bpy.props.BoolProperty(
+		name='Autosave videos',
+		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
+		default=True)
 	ffmpeg_location: bpy.props.StringProperty(
 		name="FFmpeg location",
 		description="System location where the the FFmpeg command line interface is installed",
@@ -682,20 +686,28 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			
 	# FFmpeg Sequencing
 		layout.separator()
-		layout.label(text="FFmpeg Installation Location:")
+		layout.label(text="Autosave image sequences as videos:")
 		
-		# Layout
+		# Enable
 		grid3 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid3.prop(self, "ffmpeg_processing")
+#		grid3.label(text="")
+		
+		# Location
+		grid4 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		if not self.ffmpeg_processing:
+			grid4.active = False
+			grid4.enabled = False
 		
 		# Location entry field
-		grid3.prop(self, "ffmpeg_location", text="")
+		grid4.prop(self, "ffmpeg_location", text="")
 		
 		# Location exists success/fail
-		box3 = grid3.box()
+		box3 = grid4.box()
 		if self.ffmpeg_exists:
 			box3.label(text="✔︎ location confirmed")
 		else:
-			box3.label(text="✘ incorrect location")
+			box3.label(text="✘ invalid installation path")
 
 
 
