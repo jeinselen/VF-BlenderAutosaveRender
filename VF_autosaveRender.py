@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 1, 9),
+	"version": (2, 1, 10),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -178,6 +178,8 @@ def autosave_render(scene):
 		absolute_path = bpy.path.abspath(scene.render.filepath).rstrip()
 		# Create input image glob pattern
 		glob_pattern = '-pattern_type glob -i "' + absolute_path + '*' + scene.render.file_extension + '"'
+		# Force overwrite and include quotations
+		absolute_path = '-y "' + absolute_path + '"'
 		# Create floating point FPS value
 		fps_float = str(scene.render.fps / scene.render.fps_base)
 		
@@ -197,7 +199,7 @@ def autosave_render(scene):
 			# Final output settings
 			ffmpeg_command += ' -vendor apl0 -an -sn'
 			# Output file path
-			ffmpeg_command += ' -y "' + absolute_path + '.mov"'
+			ffmpeg_command += ' ' + absolute_path + '.mov'
 			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
@@ -221,7 +223,7 @@ def autosave_render(scene):
 			# Final output settings
 			ffmpeg_command += ' -pix_fmt yuv420p -movflags rtphint'
 			# Output file path
-			ffmpeg_command += ' -y "' + absolute_path + '.mp4"'
+			ffmpeg_command += ' ' + absolute_path + '.mp4'
 			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
@@ -920,7 +922,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	autosave_video_custom_command: bpy.props.StringProperty(
 		name="Custom FFmpeg Command",
 		description="Custom FFmpeg command line string; {input} {fps} {output} variables must be included, but the command path is automatically prepended",
-		default='{input} -r {fps} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 "{output}_alpha.mov"',
+		default='{input} -r {fps} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 {output}_alpha.mov',
 		maxlen=4096)
 	
 	
