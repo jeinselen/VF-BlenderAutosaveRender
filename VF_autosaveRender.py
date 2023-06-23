@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 3),
+	"version": (2, 2, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -269,7 +269,7 @@ def autosave_render(scene):
 			# Output file path
 			ffmpeg_command += ' ' + output_path + '.mp4'
 			
-			# Remove any accidental double spaces
+			# Remove any accidental double or more spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('MP4 command: ' + ffmpeg_command)
 			# Run FFmpeg command
@@ -591,21 +591,39 @@ def replaceVariables(string):
 		renderDevice = 'unknown'
 		renderSamples = 'unknown'
 		renderFeatures = 'unknown'
-
+	
+	# Get conditional project variables
+	projectItem = projectMaterial = projectNode = 'None'
+	if bpy.context.view_layer.objects.active:
+		# Set active object name
+		projectItem = bpy.context.view_layer.objects.active.name
+		if bpy.context.view_layer.objects.active.active_material:
+			# Set active material slot name
+			projectMaterial = bpy.context.view_layer.objects.active.active_material.name
+			if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active:
+				# Set active node name OR image name
+				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image:
+					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
+					# Remove file extension (this could be unhelpful if we need to compare renders with a .psd versus .jpg)
+					projectNode = sub(r'\.\w{3,4}$', '', projectNode)
+				else:
+					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+	
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found
 	# Project variables
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", bpy.context.scene.name)
 	string = string.replace("{collection}", bpy.context.collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
-	string = string.replace("{item}", bpy.context.view_layer.objects.active.name if bpy.context.view_layer.objects.active else 'None')
-	string = string.replace("{material}", bpy.context.view_layer.objects.active.active_material.name if bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.active_material else 'None')
+	string = string.replace("{item}", projectItem)
+	string = string.replace("{material}", projectMaterial)
+	string = string.replace("{node}", projectNode)
 	# Rendering variables
 	string = string.replace("{renderengine}", renderEngine)
 	string = string.replace("{device}", renderDevice)
 	string = string.replace("{samples}", renderSamples)
 	string = string.replace("{features}", renderFeatures)
-		# {rendertime} is handled elsewhere
+		# {rendertime} must be handled exclusively in the post-render function
 	# System variables
 	string = string.replace("{host}", platform.node().split('.')[0])
 	string = string.replace("{platform}", platform.platform())
@@ -876,7 +894,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 
 
 ###########################################################################
-# Individual project settings
+# Local project settings
 
 class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	enable_autosave_render: bpy.props.BoolProperty(
