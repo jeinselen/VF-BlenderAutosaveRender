@@ -1059,7 +1059,6 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 	bl_context = "render"
 	bl_label = "Autosave Video"
 	bl_parent_id = "RENDER_PT_output"
-	# bl_options = {'DEFAULT_CLOSED'}
 
 	@classmethod
 	def poll(cls, context):
@@ -1072,15 +1071,9 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 			and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS
 		)
 	
-#	def draw_header(self, context):
-#		self.layout.label(text="Autosave Video")
-#		if bpy.context.scene.render.image_settings.file_format not in FFMPEG_FORMATS:
-#			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_video', text='')
-	
 	def draw(self, context):
 		layout = self.layout
 		layout.use_property_decorate = False  # No animation
-#		layout.use_property_split = True
 		
 		# Variable list popup button
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
@@ -1100,40 +1093,6 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 			input.active = False
 			input.enabled = False
 		input.prop(context.scene.autosave_render_settings, 'output_file_serial')
-		
-#		columns = layout.row(align=True)
-#		col1 = columns.column(align=True)
-#		col1.scale_x = 0.625
-#		col2 = columns.column(align=True)
-#		
-#		# ProRes
-#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_prores', text='ProRes')
-#		options = col2.row()
-#		if not bpy.context.scene.autosave_render_settings.autosave_video_prores:
-#			options.active = False
-#			options.enabled = False
-#		quality = options.row()
-#		quality.scale_x = 0.25
-#		quality.prop(context.scene.autosave_render_settings, 'autosave_video_prores_quality', expand=True)
-#		options.prop(context.scene.autosave_render_settings, 'autosave_video_prores_location', text='')
-#		
-#		# MP4
-#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_mp4', text='MP4')
-#		options = col2.row()
-#		if not bpy.context.scene.autosave_render_settings.autosave_video_mp4:
-#			options.active = False
-#			options.enabled = False
-#		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_quality', slider=True)
-#		options.prop(context.scene.autosave_render_settings, 'autosave_video_mp4_location', text='')
-#		
-#		# Custom command string
-#		col1.prop(context.scene.autosave_render_settings, 'autosave_video_custom', text='Custom')
-#		options = col2.row()
-#		if not bpy.context.scene.autosave_render_settings.autosave_video_custom:
-#			options.active = False
-#			options.enabled = False
-#		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_command', text='')
-#		options.prop(context.scene.autosave_render_settings, 'autosave_video_custom_location', text='')
 		
 		# ProRes alternate UI
 		layout.separator()
@@ -1190,13 +1149,6 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 	bl_context = "render"
 	bl_label = "Autosave Render"
 	bl_parent_id = "RENDER_PT_output"
-	# bl_options = {'DEFAULT_CLOSED'}
-	
-	# Check for engine compatibility
-	# compatible_render_engines = {'BLENDER_RENDER', 'BLENDER_OPENGL', 'BLENDER_WORKBENCH', 'BLENDER_EEVEE', 'CYCLES', 'RPR', 'LUXCORE'}
-	# @classmethod
-	# def poll(cls, context):
-		# return (context.engine in cls.compatible_render_engines)
 	
 	@classmethod
 	def poll(cls, context):
