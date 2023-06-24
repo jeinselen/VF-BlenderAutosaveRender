@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 4),
+	"version": (2, 2, 5),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -365,7 +365,7 @@ def autosave_render(scene):
 		if file_format == 'SCENE':
 			if original_format not in IMAGE_FORMATS:
 				print('VF Autosave Render: {} is not an image format. Image not saved.'.format(original_format))
-				return {'ERROR'}
+				return {'CANCELLED'}
 		elif file_format == 'JPEG':
 			scene.render.image_settings.file_format = 'JPEG'
 		elif file_format == 'PNG':
@@ -472,7 +472,7 @@ def autosave_render(scene):
 		image = bpy.data.images['Render Result']
 		if not image:
 			print('VF Autosave Render: Render Result not found. Image not saved.')
-			return
+			return {'CANCELLED'}
 		
 		# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
 		image.save_render(filepath, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
@@ -604,10 +604,10 @@ def replaceVariables(string):
 				# Set active node name OR image name
 				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
-					# Remove file extension (this could be unhelpful if we need to compare renders with a .psd versus .jpg)
-					projectNode = sub(r'\.\w{3,4}$', '', projectNode)
 				else:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+				# Remove file extension (this could be unhelpful if we need to compare renders with a .psd versus .jpg)
+				projectNode = sub(r'\.\w{3,4}$', '', projectNode)
 	
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found
 	# Project variables
@@ -775,7 +775,6 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Test if it's a valid path
 		if self.ffmpeg_location != self.ffmpeg_location_previous:
 			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
-#			print("FFmpeg status: "+str(self.ffmpeg_exists))
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# User Interface
@@ -1280,7 +1279,6 @@ class AutosaveRenderVariableCopy(bpy.types.Operator):
 	
 	def execute(self, context):
 		context.window_manager.clipboard = self.string
-#		print(context.window_manager.clipboard)
 		return {'FINISHED'}
 
 # Render output UI
