@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 2, 5),
+	"version": (2, 3, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -601,8 +601,11 @@ def replaceVariables(string):
 			# Set active material slot name
 			projectMaterial = bpy.context.view_layer.objects.active.active_material.name
 			if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active:
-				# Set active node name OR image name
-				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image:
+				# Set image name to the Batch Render Target if active and available
+				if bpy.context.scene.autosave_render_settings.batch_active and bpy.context.scene.autosave_render_settings.batch_type == 'imgs' and bpy.data.materials.get(bpy.context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node):
+					projectNode = bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node).image.name
+				# Set active node name or image name if available
+				elif bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.has_data:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
 				else:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
@@ -748,7 +751,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			('JPEG', 'JPEG', 'Save as jpeg'),
 			('OPEN_EXR', 'OpenEXR', 'Save as exr'),
 			],
-		default='JPEG')
+		default='PNG')
 	
 	# FFMPEG output processing
 	ffmpeg_processing: bpy.props.BoolProperty(
@@ -1046,6 +1049,51 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		default="/",
 		maxlen=4096,
 		subtype="DIR_PATH")
+	
+	# Batch rendering options
+	batch_active: bpy.props.BoolProperty(
+		name="Batch Rendering Active",
+		description="Tracks status of batch rendering",
+		default=False)
+	batch_type: bpy.props.EnumProperty(
+		name='Batch Type',
+		description='Choose the batch rendering system',
+		items=[
+			('cams', 'Cameras', 'Batch render all specified cameras'),
+			('cols', 'Collections', 'Batch render all specified collections'),
+			('itms', 'Items', 'Batch render all specified items'),
+			(None),
+			('imgs', 'Images', 'Batch render using images from specified folder'),
+			],
+		default='imgs')
+	batch_range: bpy.props.EnumProperty(
+		name='Range',
+		description='Batch render single frame or full timeline sequence',
+		items=[
+			('still', 'Still', 'Batch render single frame for each element'),
+			('sequence', 'Sequence', 'Batch render timeline range for each element')
+			],
+		default='sequence')
+	# Batch cameras
+	# Batch collections
+	# Batch items
+	# Batch images
+	batch_images_location: bpy.props.StringProperty(
+		name="Source Folder",
+		description="Source folder of images to be used in batch rendering",
+		default="",
+		maxlen=4096,
+		subtype="DIR_PATH")
+	batch_images_material: bpy.props.StringProperty(
+		name="Target Material",
+		description='Target material for batch rendering images',
+		default='',
+		maxlen=4096)
+	batch_images_node: bpy.props.StringProperty(
+		name="Target Node",
+		description='Target node for batch rendering images',
+		default='',
+		maxlen=4096)
 
 
 
@@ -1345,10 +1393,220 @@ def image_viewer_feedback_display(self, context):
 		box = self.layout.box()
 		box.label(text="  FFmpeg Image Sequence Processing... ")
 
+
+
+###########################################################################
+# Set material and node for Batch Render feature
+		
+class VF_autosave_render_batch_assign_image_target(bpy.types.Operator):
+	bl_idname = 'render.vf_autosave_render_batch_assign_image_target'
+	bl_label = 'Assign image target'
+	bl_description = "Assign active node in material as target for batch rendering images"
+	bl_space_type = "NODE_EDITOR"
+	bl_options = {'REGISTER', 'UNDO'}
+	
+	@classmethod
+	def poll(cls, context):
+		return (
+			bpy.context.view_layer.objects.active
+			and bpy.context.view_layer.objects.active.active_material
+			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active
+			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE'
+		)
+
+	def execute(self, context):
+		# Assign active material from active object
+		context.scene.autosave_render_settings.batch_images_material = context.view_layer.objects.active.active_material.name
+		# Assign active node from active material from active object
+		context.scene.autosave_render_settings.batch_images_node = context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+		return {'FINISHED'}
+
+###########################################################################
+# Begin Batch Render
+
+class VF_autosave_render_batch(bpy.types.Operator):
+	bl_idname = 'render.vf_autosave_render_batch'
+	bl_label = 'Begin Batch Render'
+	bl_description = "Batch render specified elements"
+	bl_space_type = "VIEW_3D"
+#	bl_options = {'REGISTER', 'UNDO'}
+	
+	@classmethod
+	def poll(cls, context):
+		return ( True )
+	
+	def invoke(self, context, event):
+			return context.window_manager.invoke_props_dialog(self)
+	
+	def draw(self, context):
+		try:
+			layout = self.layout
+#			layout.operator_context = 'INVOKE_DEFAULT' # 'INVOKE_AREA'
+			layout.label(text="Blender will be unresponsive while processing, proceed?")
+		except Exception as exc:
+			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Begin Batch Render confirmation header')
+	
+	def execute(self, context):
+		context.scene.autosave_render_settings.batch_active = True
+		print('Batch Render Process Started')
+		
+		if context.scene.autosave_render_settings.batch_type == 'imgs':
+			# Get source folder and target names
+			source_folder = bpy.path.abspath(context.scene.autosave_render_settings.batch_images_location)
+			if os.path.isdir(source_folder):
+				# Image extensions attribute is undocumented
+				# https://blenderartists.org/t/bpy-ops-image-open-supported-formats/1237197/6
+				source_images = [f for f in os.listdir(source_folder) if f.lower().endswith(tuple(bpy.path.extensions_image))]
+			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Image source directory not found.')
+				return {'CANCELLED'}
+			
+			# Get target
+			target_material = context.scene.autosave_render_settings.batch_images_material
+			target_node = context.scene.autosave_render_settings.batch_images_node
+			target = None
+			if bpy.data.materials.get(target_material) and bpy.data.materials[target_material].node_tree.nodes.get(target_node) and bpy.data.materials[target_material].node_tree.nodes.get(target_node).type == 'TEX_IMAGE':
+				target = bpy.data.materials[target_material].node_tree.nodes.get(target_node)
+			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Target material node not found.')
+				return {'CANCELLED'}
+			
+			# Save current image, if assigned
+			original_image = None
+			if target.image.has_data:
+				original_image = bpy.data.materials[target_material].node_tree.nodes.get(target_node).image
+			
+			for img_file in source_images:
+				# Import as new image if it doesn't already exist
+				image = bpy.data.images.load(os.path.join(source_folder, img_file), check_existing=True)
+				
+				# Set node image to the new image
+				target.image = image
+				
+				# Render
+				if context.scene.autosave_render_settings.batch_range == 'still':
+					# Render Still
+					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+				else:
+					# Sequence
+					bpy.ops.render.render(animation=True, use_viewport=True)
+			
+			# Reset node to original texture, if previously assigned
+			if original_image:
+				target.image = original_image
+		
+		context.scene.autosave_render_settings.batch_active = False
+		return {'FINISHED'}
+
+###########################################################################
+# View 3D Batch Render UI rendering class
+		
+class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
+	bl_idname = 'VFTOOLS_PT_batch_render_setup'
+	bl_label = 'Batch Render'
+	bl_description = 'Manage batch rendering options'
+	bl_space_type = 'VIEW_3D'
+	bl_region_type = 'UI'
+	bl_category = 'VF Tools'
+	bl_order = 16
+	bl_options = {'DEFAULT_CLOSED'}
+	
+	@classmethod
+	def poll(cls, context):
+		return True
+	
+	def draw_header(self, context):
+		try:
+			layout = self.layout
+		except Exception as exc:
+			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Batch Render panel header')
+			
+	def draw(self, context):
+#		try:
+		if True:
+			# UI Layout
+			layout = self.layout
+#			layout.use_property_split = True
+			layout.use_property_decorate = False # No animation
+			
+			# General variables
+			batch_count = 0
+			batch_error = ''
+			batch_start = 'Batch render '
+			
+			# Batch type
+			layout.prop(context.scene.autosave_render_settings, 'batch_type', text='')
+			
+			# Settings for Cameras
+			
+			# Settings for Collections
+			
+			# Settings for Items
+			
+			# Settings for Images
+			if context.scene.autosave_render_settings.batch_type == 'imgs':
+				# Source directory
+				layout.prop(context.scene.autosave_render_settings, 'batch_images_location', text='')
+				
+				# Button to asign material node
+				# Only if valid selection is available
+				target = layout.row()
+				target_text = 'Assign Image Target'
+				
+				# List the assigned material node if it exists
+				box = layout.box()
+				# Material and Node feedback (and remove the reference if it no longer exists)
+				if not (bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.active_material and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE'):
+#					box.label(text = 'Select object > material > image node to assign target')
+					target_text = 'Select object > material > image node to assign target'
+				else:
+					target_text = 'Assign: ' + bpy.context.view_layer.objects.active.active_material.name + ' > ' + bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+				
+				if bpy.data.materials.get(context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(context.scene.autosave_render_settings.batch_images_node):
+					box.label(text = 'Target: ' + context.scene.autosave_render_settings.batch_images_material + ' > ' + context.scene.autosave_render_settings.batch_images_node)
+				elif len(context.scene.autosave_render_settings.batch_images_material) > 0:
+					box.label(text = 'Select object > material > image node to assign target')
+				
+				# Insert target operator into element above the feedback box (this is done out of order to collect necessary data)
+				target.operator(VF_autosave_render_batch_assign_image_target.bl_idname, text = target_text)
+				
+				# Set batch count
+				absolute_source_path = bpy.path.abspath(context.scene.autosave_render_settings.batch_images_location)
+				if os.path.isdir(absolute_source_path):
+					# Image extensions attribute is undocumented
+					# https://blenderartists.org/t/bpy-ops-image-open-supported-formats/1237197/6
+					image_files = [f for f in os.listdir(absolute_source_path) if f.lower().endswith(tuple(bpy.path.extensions_image))]
+					batch_count = len(image_files)
+				
+				batch_error = 'Missing source directory'
+			
+			# Batch range setting (still or sequence)
+			layout.prop(context.scene.autosave_render_settings, 'batch_range', expand = True)
+			
+			# Set variables
+			batch_start += str(batch_count)
+			batch_start += ' still' if context.scene.autosave_render_settings.batch_range == 'still' else ' sequence'
+			batch_start += 's' if batch_count > 1 else ''
+			
+			# Start Batch Render button with title feedback
+			button = layout.row()
+			if batch_count == 0:
+				button.active = False
+				button.enabled = False
+				button.operator(VF_autosave_render_batch.bl_idname, text=batch_error)
+			else:
+				button.operator(VF_autosave_render_batch.bl_idname, text=batch_start)
+#		except Exception as exc:
+#			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Batch Render panel')
+
+
+
 ###########################################################################
 # Addon registration functions
 
-classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy)
+classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy, VF_autosave_render_batch_assign_image_target, VF_autosave_render_batch, VFTOOLS_PT_autosave_batch_setup)
 
 def register():
 	for cls in classes:
