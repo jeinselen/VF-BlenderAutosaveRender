@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 3, 2),
+	"version": (2, 3, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -755,13 +755,13 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	
 	# FFMPEG output processing
 	ffmpeg_processing: bpy.props.BoolProperty(
-		name='Autosave videos',
-		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
+		name='Enable Autosave Video',
+		description='Enables FFmpeg image sequence compilation options in the Output panel',
 		default=True)
 	ffmpeg_location: bpy.props.StringProperty(
 		name="FFmpeg location",
 		description="System location where the the FFmpeg command line interface is installed",
-		default="/opt/local/bin/ffmpeg",
+		default="/",
 		maxlen=4096,
 		update=lambda self, context: self.check_ffmpeg_location())
 	ffmpeg_location_previous: bpy.props.StringProperty(default="")
@@ -775,9 +775,16 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Ensure it points at ffmpeg
 		if not self.ffmpeg_location.endswith('ffmpeg'):
 			self.ffmpeg_location = self.ffmpeg_location + 'ffmpeg'
-		# Test if it's a valid path
+		# Test if it's a valid path and replace with valid path if such exists
 		if self.ffmpeg_location != self.ffmpeg_location_previous:
-			self.ffmpeg_exists = False if which(self.ffmpeg_location) is None else True
+			if which(self.ffmpeg_location) is None:
+				if which("ffmpeg") is None:
+					self.ffmpeg_exists = False
+				else:
+					self.ffmpeg_location = which("ffmpeg")
+					self.ffmpeg_exists = True
+			else:
+				self.ffmpeg_exists = True
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# User Interface
@@ -885,9 +892,9 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		
 		# Location exists success/fail
 		if self.ffmpeg_exists:
-			input.label(text="✔︎ confirmed")
+			input.label(text="✔︎ installed")
 		else:
-			input.label(text="✘ invalid")
+			input.label(text="✘ missing")
 
 
 
@@ -1393,7 +1400,7 @@ def image_viewer_feedback_display(self, context):
 
 ###########################################################################
 # Set material and node for Batch Render feature
-		
+
 class VF_autosave_render_batch_assign_image_target(bpy.types.Operator):
 	bl_idname = 'render.vf_autosave_render_batch_assign_image_target'
 	bl_label = 'Assign image target'
