@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 3, 1),
+	"version": (2, 3, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -763,15 +763,15 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description="System location where the the FFmpeg command line interface is installed",
 		default="/opt/local/bin/ffmpeg",
 		maxlen=4096,
-		update=lambda self, context: self.update_ffmpeg_location())
+		update=lambda self, context: self.check_ffmpeg_location())
 	ffmpeg_location_previous: bpy.props.StringProperty(default="")
 	ffmpeg_exists: bpy.props.BoolProperty(
 		name="FFmpeg exists",
-		description='Stores the existance of FFmpeg at the defined system location',
+		description='Stores the existence of FFmpeg at the defined system location',
 		default=False)
 	
 	# Validate the ffmpeg location string on value change and plugin registration
-	def update_ffmpeg_location(self):
+	def check_ffmpeg_location(self):
 		# Ensure it points at ffmpeg
 		if not self.ffmpeg_location.endswith('ffmpeg'):
 			self.ffmpeg_location = self.ffmpeg_location + 'ffmpeg'
@@ -875,23 +875,19 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Enable
 		grid3 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid3.prop(self, "ffmpeg_processing")
-#		grid3.label(text="")
 		
-		# Location
-		grid4 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		# Location input field
+		input = grid3.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		if not self.ffmpeg_processing:
-			grid4.active = False
-			grid4.enabled = False
-		
-		# Location entry field
-		grid4.prop(self, "ffmpeg_location", text="")
+			input.active = False
+			input.enabled = False
+		input.prop(self, "ffmpeg_location", text="")
 		
 		# Location exists success/fail
-		box3 = grid4.box()
 		if self.ffmpeg_exists:
-			box3.label(text="✔︎ location confirmed")
+			input.label(text="✔︎ confirmed")
 		else:
-			box3.label(text="✘ invalid installation path")
+			input.label(text="✘ invalid")
 
 
 
@@ -1628,7 +1624,7 @@ def register():
 	bpy.types.RENDER_PT_output.append(RENDER_PT_total_render_time_display)
 	bpy.types.NODE_PT_active_node_properties.prepend(NODE_PT_output_path_variable_list)
 	## Update FFmpeg location
-	bpy.context.preferences.addons[__name__].preferences.update_ffmpeg_location()
+	bpy.context.preferences.addons[__name__].preferences.check_ffmpeg_location()
 
 def unregister():
 	for cls in reversed(classes):
