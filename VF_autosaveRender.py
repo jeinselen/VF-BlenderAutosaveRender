@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 3, 3),
+	"version": (2, 4, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -22,6 +22,8 @@ import time
 # FFmpeg system access
 import subprocess
 from shutil import which
+# Pushover notifications
+import requests
 
 IMAGE_FORMATS = (
 	'BMP',
@@ -482,6 +484,40 @@ def autosave_render(scene):
 		scene.render.image_settings.color_mode = original_colormode
 		scene.render.image_settings.color_depth = original_colordepth
 	
+	# Pushover notification
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_enable and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key) == 30 and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app) == 30:
+		message = bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_message
+		message = message.replace("{rendertime}", str(render_time) + 's')
+		message = message.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+		message = replaceVariables(message)
+		try:
+			r = requests.post('https://api.pushover.net/1/messages.json', data = {
+				"token": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app,
+				"user": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key,
+				"title": "Blender Render Completed",
+				"message": message
+			})
+			if r.status_code == 200:
+				print(r.text)
+			if r.status_code == 500:
+				print('Error in VF Autosave Render: Pushover notification service unavailable')
+				print(r.text)
+			else:
+				print('Error in VF Autosave Render: Pushover URL request failed')
+				print(r.text)
+		except Exception as exc:
+			print(str(exc) + " | Error in VF Autosave Render: failed to send Pushover notification")
+	
+	# MacOS Siri text-to-speech announcement
+	# Re-check Say location just to be extra-sure (otherwise this is only checked when the add-on is first enable)
+	bpy.context.preferences.addons[__name__].preferences.check_macos_say_location()
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_exists and bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_enable:
+		message = bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_message
+		message = message.replace("{rendertime}", str(render_time))
+		message = message.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+		message = replaceVariables(message)
+		os.system('say "' + message + '"')
+	
 	# Save external log file
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
 		# Log file settings
@@ -787,6 +823,50 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 				self.ffmpeg_exists = True
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
+	# Render Complete Notifications
+	# Pushover app notifications
+	pushover_enable: bpy.props.BoolProperty(
+		name='Pushover Notification',
+		description='Enable Pushover mobile device push notifications (requires non-subscription app and user account https://pushover.net/)',
+		default=False)
+	pushover_key: bpy.props.StringProperty(
+		name="Pushover User Key",
+		description="Pushover user key, available after setting up a user account",
+		default="EnterUserKeyHere",
+		maxlen=64)
+	pushover_app: bpy.props.StringProperty(
+		name="Pushover App Token",
+		description="Pushover application token, available after setting up a custom application",
+		default="EnterAppTokenHere",
+		maxlen=64)
+	pushover_message: bpy.props.StringProperty(
+		name="Pushover Message",
+		description="Message that will be sent to Pushover devices",
+		default="\"{project}\" rendering completed on {host}",
+		maxlen=2048)
+	
+	# MacOS Siri text-to-speech announcement
+	macos_say_enable: bpy.props.BoolProperty(
+		name='Siri Announcement',
+		description='Enable MacOS Siri text-to-speech announcements',
+		default=False)
+	macos_say_exists: bpy.props.BoolProperty(
+		name="MacOS Say exists",
+		description='Stores the existence of MacOS Say',
+		default=False)
+	macos_say_message: bpy.props.StringProperty(
+		name="Siri Message",
+		description="Message that Siri will read out loud",
+		default="\"{project}\" rendering completed in {rendertime} seconds",
+		maxlen=2048)
+	
+	# Validate the MacOS Say location on plugin registration
+	def check_macos_say_location(self):
+		# Test if it's a valid path
+		self.macos_say_exists = False if which('say') is None else True
+	
+	
+	
 	# User Interface
 	def draw(self, context):
 		layout = self.layout
@@ -895,6 +975,30 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			input.label(text="✔︎ installed")
 		else:
 			input.label(text="✘ missing")
+		
+	# Notifications
+		layout.separator()
+		layout.label(text="Render Complete Notifications:")
+		
+		# Pushover notifications
+		layout.prop(self, "pushover_enable")
+		column = layout.column(align=True)
+		row = column.row(align=True)
+		if not self.pushover_enable:
+			column.active = False
+			column.enabled = False
+		row.prop(self, "pushover_key", text="")
+		row.prop(self, "pushover_app", text="")
+		column.prop(self, "pushover_message", text="")
+		
+		# Apple MacOS Siri text-to-speech announcement
+		if self.macos_say_exists:
+			layout.prop(self, "macos_say_enable")
+			input = layout.row()
+			if not self.macos_say_enable:
+				input.active = False
+				input.enabled = False
+			input.prop(self, "macos_say_message", text='')
 
 
 
@@ -1632,6 +1736,7 @@ def register():
 	bpy.types.NODE_PT_active_node_properties.prepend(NODE_PT_output_path_variable_list)
 	## Update FFmpeg location
 	bpy.context.preferences.addons[__name__].preferences.check_ffmpeg_location()
+	bpy.context.preferences.addons[__name__].preferences.check_macos_say_location()
 
 def unregister():
 	for cls in reversed(classes):
