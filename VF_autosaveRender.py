@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 4, 0),
+	"version": (2, 4, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -228,7 +228,10 @@ def autosave_render(scene):
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('ProRes command: ' + ffmpeg_command)
 			# Run FFmpeg command
-			subprocess.call(ffmpeg_command, shell=True)
+			try:
+				subprocess.call(ffmpeg_command, shell=True)
+			except Exception as exc:
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
 		
 		# MP4 output
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
@@ -275,7 +278,10 @@ def autosave_render(scene):
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('MP4 command: ' + ffmpeg_command)
 			# Run FFmpeg command
-			subprocess.call(ffmpeg_command, shell=True)
+			try:
+				subprocess.call(ffmpeg_command, shell=True)
+			except Exception as exc:
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
 		
 		# Custom output
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
@@ -314,7 +320,10 @@ def autosave_render(scene):
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
 			print('Custom command: ' + ffmpeg_command)
 			# Run FFmpeg command
-			subprocess.call(ffmpeg_command, shell=True)
+			try:
+				subprocess.call(ffmpeg_command, shell=True)
+			except Exception as exc:
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
 	
 	# Increment the output serial number if it was used any output path
 	if bpy.context.scene.autosave_render_settings.output_file_serial_used:
@@ -842,7 +851,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	pushover_message: bpy.props.StringProperty(
 		name="Pushover Message",
 		description="Message that will be sent to Pushover devices",
-		default="\"{project}\" rendering completed on {host}",
+		default="\"{project}\" rendering completed in {rendertime} seconds on {host}",
 		maxlen=2048)
 	
 	# MacOS Siri text-to-speech announcement
