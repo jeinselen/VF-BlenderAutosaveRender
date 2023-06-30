@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 4, 1),
+	"version": (2, 5, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -22,6 +22,9 @@ import time
 # FFmpeg system access
 import subprocess
 from shutil import which
+# Email notifications
+import smtplib
+from email.mime.text import MIMEText
 # Pushover notifications
 import requests
 
@@ -493,39 +496,46 @@ def autosave_render(scene):
 		scene.render.image_settings.color_mode = original_colormode
 		scene.render.image_settings.color_depth = original_colordepth
 	
-	# Pushover notification
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_enable and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key) == 30 and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app) == 30:
-		message = bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_message
-		message = message.replace("{rendertime}", str(render_time) + 's')
-		message = message.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
-		message = replaceVariables(message)
-		try:
-			r = requests.post('https://api.pushover.net/1/messages.json', data = {
-				"token": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app,
-				"user": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key,
-				"title": "Blender Render Completed",
-				"message": message
-			})
-			if r.status_code == 200:
-				print(r.text)
-			if r.status_code == 500:
-				print('Error in VF Autosave Render: Pushover notification service unavailable')
-				print(r.text)
-			else:
-				print('Error in VF Autosave Render: Pushover URL request failed')
-				print(r.text)
-		except Exception as exc:
-			print(str(exc) + " | Error in VF Autosave Render: failed to send Pushover notification")
-	
-	# MacOS Siri text-to-speech announcement
-	# Re-check Say location just to be extra-sure (otherwise this is only checked when the add-on is first enable)
-	bpy.context.preferences.addons[__name__].preferences.check_macos_say_location()
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_exists and bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_enable:
-		message = bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_message
-		message = message.replace("{rendertime}", str(render_time))
-		message = message.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
-		message = replaceVariables(message)
-		os.system('say "' + message + '"')
+	# Render complete notifications, only if the time spent rendering exceeds the minimum time defined in the preferences
+	if render_time > float(bpy.context.preferences.addons['VF_autosaveRender'].preferences.minimum_time):
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_enable:
+			# Subject line variable replacement
+			subject = replaceVariables(
+				bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_subject,
+				rendertime=render_time,
+				serial=bpy.context.scene.autosave_render_settings.output_file_serial
+				)
+			# Body text variable replacement
+			message = replaceVariables(
+				bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_message,
+				rendertime=render_time,
+				serial=bpy.context.scene.autosave_render_settings.output_file_serial
+				)
+			send_email(subject, message)
+		
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_enable and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key) == 30 and len(bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app) == 30:
+			subject = replaceVariables(
+				bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_subject,
+				rendertime=render_time,
+				serial=bpy.context.scene.autosave_render_settings.output_file_serial
+				)
+			message = replaceVariables(
+				bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_message,
+				rendertime=render_time,
+				serial=bpy.context.scene.autosave_render_settings.output_file_serial
+				)
+			send_pushover(subject, message)
+		
+		# MacOS Siri text-to-speech announcement
+		# Re-check Say location just to be extra-sure (otherwise this is only checked when the add-on is first enable)
+		bpy.context.preferences.addons[__name__].preferences.check_macos_say_location()
+		if bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_exists and bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_enable:
+			message = replaceVariables(
+				bpy.context.preferences.addons['VF_autosaveRender'].preferences.macos_say_message,
+				rendertime=render_time,
+				serial=bpy.context.scene.autosave_render_settings.output_file_serial
+				)
+			os.system('say "' + message + '"')
 	
 	# Save external log file
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.external_render_time:
@@ -711,6 +721,42 @@ def readableToSeconds(readable):
 	return int(hours)*3600 + int(minutes)*60 + float(seconds)
 
 ###########################################################################
+# Notification system functions
+
+# Send email notification
+def send_email(subject, message):
+	try:
+		msg = MIMEText(message)
+		msg['Subject'] = subject
+		msg['From'] = bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_from
+		msg['To'] = bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_to
+		with smtplib.SMTP_SSL(bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_server, bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_port) as smtp_server:
+			smtp_server.login(bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_from, bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_password)
+			smtp_server.sendmail(bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_from, bpy.context.preferences.addons['VF_autosaveRender'].preferences.email_to.split(', '), msg.as_string())
+	except Exception as exc:
+		print(str(exc) + " | Error in VF Autosave Render: failed to send email notification")
+		
+# Send Pushover notification
+def send_pushover(subject, message):
+	try:
+		r = requests.post('https://api.pushover.net/1/messages.json', data = {
+			"token": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_app,
+			"user": bpy.context.preferences.addons['VF_autosaveRender'].preferences.pushover_key,
+			"title": subject,
+			"message": message
+		})
+		if r.status_code == 200:
+			print(r.text)
+		if r.status_code == 500:
+			print('Error in VF Autosave Render: Pushover notification service unavailable')
+			print(r.text)
+		else:
+			print('Error in VF Autosave Render: Pushover URL request failed')
+			print(r.text)
+	except Exception as exc:
+		print(str(exc) + " | Error in VF Autosave Render: failed to send Pushover notification")
+
+###########################################################################
 # Global user preferences and UI rendering class
 
 class AutosaveRenderPreferences(bpy.types.AddonPreferences):
@@ -833,6 +879,51 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# Render Complete Notifications
+	minimum_time: bpy.props.IntProperty(
+		name="Minimum Time",
+		description="Minimum rendering time required before notifications will be enabled, in seconds",
+		default=300)
+	
+	# Email notifications
+	email_enable: bpy.props.BoolProperty(
+		name='Email Notification',
+		description='Enable email notifications',
+		default=False)
+	email_server: bpy.props.StringProperty(
+		name="SMTP Server",
+		description="SMTP server address",
+		default="smtp.gmail.com",
+		maxlen=64)
+	email_port: bpy.props.IntProperty(
+		name="SMTP Port",
+		description="Port number used by the SMTP server",
+		default=465)
+	email_from: bpy.props.StringProperty(
+		name="Username",
+		description="Email address of the account emails will be sent from",
+		default="user@gmail.com",
+		maxlen=64)
+	email_password: bpy.props.StringProperty(
+		name="Password",
+		description="Password of the account emails will be sent from (Gmail accounts require 2FA and a custom single-use App Password)",
+		default="password",
+		subtype="PASSWORD")
+	email_to: bpy.props.StringProperty(
+		name="Recipients",
+		description="Comma separated list of recipient addresses, use https://freecarrierlookup.com/ to get the correct address for text messages",
+		default="email@server.com, 1234567890@carrier.net",
+		maxlen=1024)
+	email_subject: bpy.props.StringProperty(
+		name="Email Subject",
+		description="Text string sent as the email subject line",
+		default="{project} rendering completed",
+		maxlen=1024)
+	email_message: bpy.props.StringProperty(
+		name="Email Body",
+		description="Text string sent as the email body copy",
+		default="{project} — {scene} rendering completed in {rH}:{rM}:{rS} on {host}",
+		maxlen=4096)
+	
 	# Pushover app notifications
 	pushover_enable: bpy.props.BoolProperty(
 		name='Pushover Notification',
@@ -848,11 +939,16 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description="Pushover application token, available after setting up a custom application",
 		default="EnterAppTokenHere",
 		maxlen=64)
+	pushover_subject: bpy.props.StringProperty(
+		name="Pushover Title",
+		description="Notification title that will be sent to Pushover devices",
+		default="{project} rendering completed",
+		maxlen=1024)
 	pushover_message: bpy.props.StringProperty(
 		name="Pushover Message",
-		description="Message that will be sent to Pushover devices",
-		default="\"{project}\" rendering completed in {rendertime} seconds on {host}",
-		maxlen=2048)
+		description="Notification message that will be sent to Pushover devices",
+		default="{project} — {scene} rendering completed in {rH}:{rM}:{rS} on {host}",
+		maxlen=4096)
 	
 	# MacOS Siri text-to-speech announcement
 	macos_say_enable: bpy.props.BoolProperty(
@@ -866,7 +962,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	macos_say_message: bpy.props.StringProperty(
 		name="Siri Message",
 		description="Message that Siri will read out loud",
-		default="\"{project}\" rendering completed in {rendertime} seconds",
+		default="{project} rendering completed in {rH} hours, {rM} minutes, and {rS} seconds",
 		maxlen=2048)
 	
 	# Validate the MacOS Say location on plugin registration
@@ -988,26 +1084,60 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	# Notifications
 		layout.separator()
 		layout.label(text="Render Complete Notifications:")
+		row = layout.row(align=False)
+		row.prop(self, "minimum_time", icon="TIME")
+		ops = row.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
+		
+		# Email notifications
+		layout.separator()
+		layout.prop(self, "email_enable")
+		settings1 = layout.row(align=False)
+		settings2 = layout.row(align=False)
+		if not self.email_enable:
+			settings1.active = False
+			settings1.enabled = False
+			settings2.active = False
+			settings2.enabled = False
+		column1 = settings1.column(align=True)
+		column1.prop(self, "email_server", text="", icon="EXPORT")
+		column1.prop(self, "email_port")
+		
+		column2 = settings1.column(align=True)
+		column2.prop(self, "email_from", text="", icon="USER")
+		column2.prop(self, "email_password", text="", icon="LOCKED")
+		
+		column = settings2.column(align=True)
+		column.prop(self, "email_to", text="", icon="USER")
+		column.prop(self, "email_subject", text="", icon="FILE_TEXT")
+		column.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
 		
 		# Pushover notifications
+		layout.separator()
 		layout.prop(self, "pushover_enable")
 		column = layout.column(align=True)
-		row = column.row(align=True)
 		if not self.pushover_enable:
 			column.active = False
 			column.enabled = False
-		row.prop(self, "pushover_key", text="")
-		row.prop(self, "pushover_app", text="")
-		column.prop(self, "pushover_message", text="")
+		row = column.row(align=True)
+		row.prop(self, "pushover_key", text="", icon="USER")
+		row.prop(self, "pushover_app", text="", icon="MODIFIER_DATA")
+		column.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
+		column.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
+		
+		if self.pushover_enable and (len(self.pushover_key) != 30 or len(self.pushover_app) != 30):
+			warning = layout.box()
+			warning.label(text='Please enter valid 30-character user and app API keys', icon="ERROR")
 		
 		# Apple MacOS Siri text-to-speech announcement
+		layout.separator()
 		if self.macos_say_exists:
 			layout.prop(self, "macos_say_enable")
 			input = layout.row()
 			if not self.macos_say_enable:
 				input.active = False
 				input.enabled = False
-			input.prop(self, "macos_say_message", text='')
+			input.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
 
 
 
