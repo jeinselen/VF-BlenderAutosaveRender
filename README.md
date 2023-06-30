@@ -64,7 +64,8 @@ The available variables are sorted into four groups: Project (values derived fro
 	- `{camera}` = render camera (independent of selection or active status)
 	- `{item}` = active item (if no item is selected or active, this will return "None")
 	- `{material}` = active material of active object (if not found, this will return "None")
-		- This variable may be more prone to failure because it requires both a selected object and an active material slot, and should only be used in scenarios where the active selection is well managed
+	- `{node}` = the active node in the active material of the active object (if not found, this will return "None")
+		- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is well managed
 2. **Rendering variables**
 	- `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
 	- `{device}` = CPU or GPU device
@@ -85,7 +86,14 @@ The available variables are sorted into four groups: Project (values derived fro
 		- Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
 		- Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
 		- LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
-	- `{rendertime}` = time spent rendering (this is calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API)
+	- `{rendertime}` = time spent rendering in seconds
+	- `{rtime}` = time spent rendering in HH-MM-SS format (hours will continue counting indefinitely, they will not roll over into days)
+	- `{rH}` = just the hours component from `{rtime}`
+	- `{rM}` = just the minutes component from `{rtime}`
+	- `{rS}` = just the seconds component from `{rtime}`
+		- **Limitation:** render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
+		- Features that are exclusively post-render and support render time variables include; autosaved videos, autosaved images, and the notification system
+		- These variables are also calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API
 3. **System variables**
 	- `{host}` = name of the computer or host being used for rendering
 	- `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
@@ -188,6 +196,38 @@ When enabled in the plugin preferences, the plugin can track elapsed time during
 This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability in render time from frame to frame, but can give a general guess as to how much render time remains.
 
 The estimation will only show up after the first frame of an animation sequence is completed, and will not be displayed during single frame renders.
+
+
+
+## Batch Render Automation
+
+_**Warning:**__ this is an experimental feature as of version 2.3, and is not fully implemented or documented yet.
+
+The `Batch Render` interface appears in the `VF Tools` tab of any 3D view, and allows the user to select from a number of options.
+
+Only the image folder batch system is currently operational; it requires a target material > image node to be set along with a source folder of textures, after which a still image or animation sequence can be rendered for each texture in the source directory.
+
+The intention is to include batch rendering for cameras, items, and collections in the future, all designed to work with the dynamic output variables for easy output formatting.
+
+
+
+## Render Complete Notifications
+
+_**Warning:**__ this is an experimental feature as of version 2.4, and is not fully documented yet.
+
+Triggers an email and/or push notification on render completion.
+
+Email setup requires an SMTP server with login credentials. Please note that while the Blender field is set to protected (it only displays asterisks), it still allows for copying of the password out of that field without protection, and may even store it in a user readable format. Please only use this feature with a burner email account.
+
+The default email settings are for a generic Gmail account, which requires a dedicated application code that is only available after two factor authentication is turned on. This is not recommended from a security standpoint, and again, should only be used with a burner email account.
+
+If you would like to be notified via text message to a mobile phone number, please use email notifications sent to your carrier of choice, you can find the correct address for your phone number here: [Free Carrier Lookup](https://freecarrierlookup.com).
+
+Mobile device push notifications rely on the Pushover service, a non-subscription one-time-purchase app for iOS or Android. Once an account is created, you will need to set up a specific application key so Blender can access the API. It's super simple, and gives you up to 10k push notifications a month per app code without any additional costs.
+
+For MacOS users, Siri can also audibly announce the render.
+
+The notification systems support all output variables listed above, including total render time.
 
 
 
