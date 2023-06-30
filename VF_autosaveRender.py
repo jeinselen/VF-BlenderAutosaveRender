@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 5, 0),
+	"version": (2, 5, 5),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -62,8 +62,8 @@ FFMPEG_FORMATS = (
 	'OPEN_EXR',
 	'TIFF')
 
-variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}", "{material}",
-				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}",
+variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
+				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}", "{rtime}", "{rH},{rM},{rS}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
 				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
 
@@ -111,22 +111,20 @@ def autosave_render_start(scene):
 					"base_path": node.base_path,
 					"file_slots": {}
 				}
-				# Replace variables
+				# Replace dynamic variables
 				if '{serial}' in node.base_path:
-					node.base_path = node.base_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
 					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
-				node.base_path = replaceVariables(node.base_path)
+				node.base_path = replaceVariables(node.base_path, serial=bpy.context.scene.autosave_render_settings.output_file_serial)
 				
 				# Save and then process the sub-path property of each file slot
 				for i, slot in enumerate(node.file_slots):
 					node_settings[node.name]["file_slots"][i] = {
 						"path": slot.path
 					}
-					# Replace variables
+					# Replace dynamic variables
 					if '{serial}' in slot.path:
-						slot.path = slot.path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
 						bpy.context.scene.autosave_render_settings.output_file_serial_used = True
-					slot.path = replaceVariables(slot.path)
+					slot.path = replaceVariables(slot.path, serial=bpy.context.scene.autosave_render_settings.output_file_serial)
 					
 		# Convert the dictionary to JSON format and save to the plugin preferences for safekeeping while rendering
 		bpy.context.scene.autosave_render_settings.output_file_nodes = json.dumps(node_settings)
@@ -195,14 +193,10 @@ def autosave_render(scene):
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_prores_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_prores_location
-				# Replace render time variable
-				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
-				# Check if the serial variable is used
+				# Replace dynamic variables
 				if '{serial}' in output_path:
-					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
 					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
-				# Replace the rest of the variables
-				output_path = replaceVariables(output_path)
+				output_path = replaceVariables(output_path, rendertime=render_time, serial=bpy.context.scene.autosave_render_settings.output_file_serial)
 				# Convert relative path into absolute path for Python and CLI compatibility
 				output_path = bpy.path.abspath(output_path)
 				# Create the project subfolder if it doesn't already exist
@@ -245,14 +239,10 @@ def autosave_render(scene):
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_mp4_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_mp4_location
-				# Replace render time variable
-				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
-				# Check if the serial variable is used
+				# Replace dynamic variables
 				if '{serial}' in output_path:
-					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
 					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
-				# Replace the rest of the variables
-				output_path = replaceVariables(output_path)
+				output_path = replaceVariables(output_path, rendertime=render_time, serial=bpy.context.scene.autosave_render_settings.output_file_serial)
 				# Convert relative path into absolute path for Python and CLI compatibility
 				output_path = bpy.path.abspath(output_path)
 				# Create the project subfolder if it doesn't already exist
@@ -295,14 +285,10 @@ def autosave_render(scene):
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_custom_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_custom_location
-				# Replace render time variable
-				output_path = output_path.replace("{rendertime}", str(render_time) + 's')
-				# Check if the serial variable is used
+				# Replace dynamic variables
 				if '{serial}' in output_path:
-					output_path = output_path.replace("{serial}", format(bpy.context.scene.autosave_render_settings.output_file_serial, '04'))
 					bpy.context.scene.autosave_render_settings.output_file_serial_used = True
-				# Replace the rest of the variables
-				output_path = replaceVariables(output_path)
+				output_path = replaceVariables(output_path, rendertime=render_time, serial=bpy.context.scene.autosave_render_settings.output_file_serial)
 				# Convert relative path into absolute path for Python and CLI compatibility
 				output_path = bpy.path.abspath(output_path)
 				# Create the project subfolder if it doesn't already exist
@@ -402,20 +388,20 @@ def autosave_render(scene):
 		filepath = bpy.path.abspath(filepath)
 		
 		# Process elements that aren't available in the global variable replacement
-		# The autosave serial number is separate from the project serial number, and must be handled here before global replacement
+		# The autosave serial number and override are separate from the project serial number
 		serialUsedGlobal = False
 		serialUsed = False
-		filepath = filepath.replace("{rendertime}", str(render_time) + 's')
+		serialNumber = -1
 		if '{serial}' in filepath:
 			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
-				filepath = filepath.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
+				serialNumber = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global
 				serialUsedGlobal = True
 			else:
-				filepath = filepath.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+				serialNumber = bpy.context.scene.autosave_render_settings.file_serial
 				serialUsed = True
 		
-		# Replace global variables in the output name string
-		filepath = replaceVariables(filepath)
+		# Replace global variables in the output path string
+		filepath = replaceVariables(filepath, rendertime=render_time, serial=serialNumber)
 		
 		# Create the project subfolder if it doesn't already exist (otherwise subsequent operations will fail)
 		if not os.path.exists(filepath):
@@ -452,8 +438,7 @@ def autosave_render(scene):
 		elif file_name_type == 'DATE':
 			filename = '{project} {date} {time}'
 		elif file_name_type == 'RENDER':
-			# Render time is not availble in the global variable replacement becuase it's computed in the above section of code, not universally available
-			filename = '{project} {renderengine} ' + str(render_time)
+			filename = '{project} {renderengine} {rendertime}'
 		else:
 			# Load custom file name with override
 			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
@@ -461,23 +446,22 @@ def autosave_render(scene):
 			else:
 				filename = bpy.context.scene.autosave_render_settings.file_name_custom
 		
-		filename = filename.replace("{rendertime}", str(render_time) + 's')
 		if '{serial}' in filename:
-			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_name_override:
-				filename = filename.replace("{serial}", format(bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global, '04'))
+			if bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_location_override:
+				serialNumber = bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global
 				serialUsedGlobal = True
 			else:
-				filename = filename.replace("{serial}", format(bpy.context.scene.autosave_render_settings.file_serial, '04'))
+				serialNumber = bpy.context.scene.autosave_render_settings.file_serial
 				serialUsed = True
+		
+		# Replace global variables in the output name string
+		filename = replaceVariables(filename, rendertime=render_time, serial=serialNumber)
 		
 		# Finish local and global serial number updates
 		if serialUsedGlobal:
 			bpy.context.preferences.addons['VF_autosaveRender'].preferences.file_serial_global += 1
 		if serialUsed:
 			bpy.context.scene.autosave_render_settings.file_serial += 1
-		
-		# Replace global variables in the output name string
-		filename = replaceVariables(filename)
 		
 		# Combine file path and file name using system separator, add extension
 		filepath = os.path.join(filepath, filename) + extension
@@ -568,10 +552,12 @@ def autosave_render(scene):
 	return {'FINISHED'}
 
 ###########################################################################
-# Variable replacement function for globally accessible variables (serial number must be provided)
-# Excludes {rendertime} as it does not exist at the start of rendering
+# Variable replacement function for globally accessible variables
+# Includes {rendertime} only if valid 0.0+ float is supplied
+# Includes {serial} only if valid 0+ integer is supplied
 
-def replaceVariables(string):
+def replaceVariables(string, rendertime=-1.0, serial=-1):
+	
 	# Get render engine feature sets
 	if bpy.context.engine == 'BLENDER_WORKBENCH':
 		renderEngine = 'Workbench'
@@ -681,7 +667,14 @@ def replaceVariables(string):
 	string = string.replace("{device}", renderDevice)
 	string = string.replace("{samples}", renderSamples)
 	string = string.replace("{features}", renderFeatures)
-		# {rendertime} must be handled exclusively in the post-render function
+	# {rendertime} special case: only enabled if a value is supplied
+	if rendertime >= 0.0:
+		string = string.replace("{rendertime}", str(rendertime) + 's')
+		rH, rM, rS = secondsToStrings(rendertime)
+		string = string.replace("{rtime}", rH + '-' + rM + '-' + rS)
+		string = string.replace("{rH}", rH)
+		string = string.replace("{rM}", rM)
+		string = string.replace("{rS}", rS)
 	# System variables
 	string = string.replace("{host}", platform.node().split('.')[0])
 	string = string.replace("{platform}", platform.platform())
@@ -701,21 +694,32 @@ def replaceVariables(string):
 	string = string.replace("{M}", datetime.datetime.now().strftime('%M'))
 	string = string.replace("{second}", "{S}") # Alternative variable
 	string = string.replace("{S}", datetime.datetime.now().strftime('%S'))
-		# the {serial} variable is handled elsewhere to account for separate autosave and output numbering
+	# {serial} special case: only enabled if a value is supplied
+	if serial >= 0:
+		string = string.replace("{serial}", format(serial, '04'))
 	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	return string
 
 ###########################################################################
 # Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
 
-# Converts float into HH:MM:SS.## format, hours expand indefinitely (will not roll over into days)
-def secondsToReadable(seconds):
-	seconds, decimals = divmod(seconds, 1)
+# Converts float seconds into [hour, minute, second] string array, with hours expand indefinitely (will not roll over into days)
+def secondsToStrings(sec):
+	seconds, decimals = divmod(float(sec), 1)
 	minutes, seconds = divmod(seconds, 60)
 	hours, minutes = divmod(minutes, 60)
-	return "%d:%02d:%02d.%02d" % (hours, minutes, seconds, round(decimals*100))
+	return [
+		"%d" % (hours),
+		"%02d" % (minutes),
+		"%02d.%02d" % (seconds, round(decimals*100))
+	]
 
-# Converts string of HH:MM:SS.## format into float
+# Converts float seconds into HH:MM:SS.## format, hours expand indefinitely (will not roll over into days)
+def secondsToReadable(seconds):
+	h, m, s = secondsToStrings(seconds)
+	return h + ":" + m + ":" + s
+
+# Converts string of HH:MM:SS.## format into float seconds
 def readableToSeconds(readable):
 	hours, minutes, seconds = readable.split(':')
 	return int(hours)*3600 + int(minutes)*60 + float(seconds)
@@ -1538,7 +1542,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 		return {'FINISHED'}
 
 	def invoke(self, context, event):
-		return context.window_manager.invoke_popup(self, width=380)
+		return context.window_manager.invoke_popup(self, width=420)
 
 	def draw(self, context):
 		layout = self.layout
