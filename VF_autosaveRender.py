@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 5, 5),
+	"version": (2, 5, 6),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -417,9 +417,7 @@ def autosave_render(scene):
 		if file_name_type == 'SERIAL':
 			# Generate dynamic serial number
 			# Finds all of the image files that start with projectname in the selected directory
-			files = [f for f in os.listdir(filepath)
-					if f.startswith(projectname)
-					and f.lower().endswith(IMAGE_EXTENSIONS)]
+			files = [f for f in os.listdir(filepath) if f.startswith(projectname) and f.lower().endswith(IMAGE_EXTENSIONS)]
 			
 			# Searches the file collection and returns the next highest number as a 4 digit string
 			def save_number_from_files(files):
@@ -633,7 +631,7 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 		renderSamples = 'unknown'
 		renderFeatures = 'unknown'
 	
-	# Get conditional project variables
+	# Get conditional project variables Item > Material > Node
 	projectItem = projectMaterial = projectNode = 'None'
 	if bpy.context.view_layer.objects.active:
 		# Set active object name
@@ -642,16 +640,16 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 			# Set active material slot name
 			projectMaterial = bpy.context.view_layer.objects.active.active_material.name
 			if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active:
-				# Set image name to the Batch Render Target if active and available
-				if bpy.context.scene.autosave_render_settings.batch_active and bpy.context.scene.autosave_render_settings.batch_type == 'imgs' and bpy.data.materials.get(bpy.context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node):
-					projectNode = bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node).image.name
 				# Set active node name or image name if available
-				elif bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.has_data:
+				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.has_data:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
 				else:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
-				# Remove file extension (this could be unhelpful if we need to compare renders with a .psd versus .jpg)
-				projectNode = sub(r'\.\w{3,4}$', '', projectNode)
+	# Set node name to the Batch Render Target if active and available
+	if bpy.context.scene.autosave_render_settings.batch_active and bpy.context.scene.autosave_render_settings.batch_type == 'imgs' and bpy.data.materials.get(bpy.context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node):
+		projectNode = bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node).image.name
+	# Remove file extension from image node names (this could be unhelpful when comparing renders with .psd versus .jpg texture sources)
+	projectNode = sub(r'\.\w{3,4}$', '', projectNode)
 	
 	# Using "replace" instead of "format" because format fails ungracefully when an exact match isn't found
 	# Project variables
