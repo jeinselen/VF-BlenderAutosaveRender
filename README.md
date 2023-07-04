@@ -217,9 +217,9 @@ _**Warning:**__ this is an experimental feature as of version 2.4, and is not fu
 
 Triggers an email and/or push notification on render completion.
 
-Email setup requires an SMTP server with login credentials. Please note that while the Blender field is set to protected (it only displays asterisks), it still allows for copying of the password out of that field without protection, and may even store it in a user readable format. Please only use this feature with a burner email account.
+Email setup requires an SMTP server with login credentials. Please note that while the Blender field is "protected" as a password (it only displays asterisks), it still allows for direct copying of the original password and stores it as plain text within the Blender user preferences file. It's not actually "protected" at all and is _dangerously_ insecure. If you choose to use this feature (_never_ with your primary email account!), you do so entirely at your own risk.
 
-The default email settings are for a generic Gmail account, which requires a dedicated application code that is only available after two factor authentication is turned on. This is not recommended from a security standpoint, and again, should only be used with a burner email account.
+The default email settings are for a generic Gmail account, which requires a dedicated application code that is only available after two factor authentication is turned on. This is not recommended from a security standpoint (that unsecured password in Blender gives full access to the gmail account), and again, should only be used with a burner email account at your own risk.
 
 If you would like to be notified via text message to a mobile phone number, please use email notifications sent to your carrier of choice, you can find the correct address for your phone number here: [Free Carrier Lookup](https://freecarrierlookup.com).
 
