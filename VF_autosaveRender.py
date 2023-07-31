@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 5, 7),
+	"version": (2, 6, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -858,7 +858,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	ffmpeg_location: bpy.props.StringProperty(
 		name="FFmpeg location",
 		description="System location where the the FFmpeg command line interface is installed",
-		default="/",
+		default="/opt/local/bin/ffmpeg",
 		maxlen=4096,
 		update=lambda self, context: self.check_ffmpeg_location())
 	ffmpeg_location_previous: bpy.props.StringProperty(default="")
@@ -1711,13 +1711,125 @@ class VF_autosave_render_batch(bpy.types.Operator):
 	
 	def execute(self, context):
 		context.scene.autosave_render_settings.batch_active = True
-		print('Batch Render Process Started')
+#		print('Batch Render Process Started')
+		
+		# Preserve manually entered batch index
+		original_batch_index = context.scene.autosave_render_settings.batch_index
 		
 		# Batch render cameras
+#		if context.scene.autosave_render_settings.batch_type == 'cams':
+			
+			# Reset batch index value
+#			context.scene.autosave_render_settings.batch_index = 0
+	
+			# Render each item in the list
+#			for col in source_collections:
+				# Set current collection to active
+	
+				# Render
+#				if context.scene.autosave_render_settings.batch_range == 'img':
+					# Render Still
+#					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+#				else:
+					# Sequence
+#					bpy.ops.render.render(animation=True, use_viewport=True)
+	
+				# Disable the collection
+	
+				# Increment index value
+#				context.scene.autosave_render_settings.batch_index += 1
 		
 		# Batch render collections
+#		if context.scene.autosave_render_settings.batch_type == 'cols':
+		
+			# Reset batch index value
+#			context.scene.autosave_render_settings.batch_index = 0
+			
+			# Render each item in the list
+#			for col in source_collections:
+				# Set current collection to active
+				
+				# Render
+#				if context.scene.autosave_render_settings.batch_range == 'img':
+					# Render Still
+#					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+#				else:
+					# Sequence
+#					bpy.ops.render.render(animation=True, use_viewport=True)
+					
+				# Disable the collection
+				
+				# Increment index value
+#				context.scene.autosave_render_settings.batch_index += 1
+			
 		
 		# Batch render items
+		if context.scene.autosave_render_settings.batch_type == 'itms':
+			# Set up selection and render status variables for restoration later
+			original_selection = False
+			
+			# Save active item
+			original_active = context.view_layer.objects.active
+			
+			# If items are selected
+			if len(context.selected_objects) > 0:
+				# Save selection and active item
+				original_selection = [obj for obj in context.selected_objects]
+				source_items = original_selection
+				
+			# If no items are selected, check for an active collection
+			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0:
+				source_items = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects]
+				
+			# If still no items are available, return cancelled
+			else:
+				return {'CANCELLED'}
+			
+			# Store the render status of each object and disable rendering
+			source_items_hidden = []
+			for obj in source_items:
+				source_items_hidden.append(obj.hide_render)
+				obj.hide_render = True
+				obj.select_set(False)
+			
+			# Reset batch index value
+			context.scene.autosave_render_settings.batch_index = 0
+			
+			# Render each item in the list
+			for obj in source_items:
+				# Set current object to selected, active, and renderable
+				obj.select_set(True)
+				context.view_layer.objects.active = obj
+				obj.hide_render = False
+				
+				# Render
+				if context.scene.autosave_render_settings.batch_range == 'img':
+					# Render Still
+					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+				else:
+					# Sequence
+					bpy.ops.render.render(animation=True, use_viewport=True)
+				
+				# Disable the object again (don't worry about active, next loop will reset it)
+				obj.select_set(False)
+				obj.hide_render = True
+				
+				# Increment index value
+				context.scene.autosave_render_settings.batch_index += 1
+			
+			# Restpore render status
+			if len(source_items_hidden) > 0:
+				for i, obj in enumerate(source_items):
+					obj.hide_render = source_items_hidden[i]
+			
+			# Restore selection
+			if original_selection:
+				for obj in original_selection:
+					obj.select_set(True)
+			
+			# Restore active item
+			if original_active:
+				context.view_layer.objects.active = original_active
 		
 		# Batch render images
 		if context.scene.autosave_render_settings.batch_type == 'imgs':
@@ -1777,6 +1889,9 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			if original_image:
 				target.image = original_image
 		
+		# Restore manually entered batch index
+		context.scene.autosave_render_settings.batch_index = original_batch_index
+		
 		context.scene.autosave_render_settings.batch_active = False
 		return {'FINISHED'}
 
@@ -1816,7 +1931,8 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 			batch_error = False
 			
 			# Batch type
-			layout.prop(context.scene.autosave_render_settings, 'batch_type', text='')
+			input0 = layout.column(align=True)
+			input0.prop(context.scene.autosave_render_settings, 'batch_type', text='')
 			
 			input1 = layout.column(align=True)
 			input2 = layout.column(align=True)
@@ -1832,9 +1948,33 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				# Display feedback
 			
 			# Settings for Items
-#			if context.scene.autosave_render_settings.batch_type == 'itms':
-				# Direct selection or items in collection
+			if context.scene.autosave_render_settings.batch_type == 'itms':
+				# Direct selection of items
+				batch_count = len(context.selected_objects)
+				
+				# Set up feedback message for selected items
+				if batch_count > 0:
+					if batch_count == 1:
+						feedback_text=str(batch_count) + ' item selected'
+					else:
+						feedback_text=str(batch_count) + ' items selected'
+					feedback_icon='OBJECT_DATA'
+				# If no items are selected, check for an active collection
+				elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0:
+					batch_count = len(context.view_layer.active_layer_collection.collection.all_objects)
+					if batch_count == 1:
+						feedback_text=str(batch_count) + ' item in collection'
+					else:
+						feedback_text=str(batch_count) + ' items in collection'
+					feedback_icon='OUTLINER_COLLECTION'
+				# If still no items are selected, display an error
+				else:
+					feedback_text='Invalid selection'
+					feedback_icon='ERROR'
+				
 				# Display feedback
+				feedback = input0.box()
+				feedback.label(text=feedback_text, icon=feedback_icon)
 			
 			# Settings for Images
 			if context.scene.autosave_render_settings.batch_type == 'imgs':
@@ -1857,7 +1997,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 #					print('VF Autosave Batch Render: Image source directory not found.')
 				feedback = input1.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
-#				input1.label(text=feedback_text, icon=feedback_icon)
 				
 				# Material node assignment
 				if bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.active_material and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE':
@@ -1878,7 +2017,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					batch_error = True
 				feedback = input2.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
-#				input2.label(text=feedback_text, icon=feedback_icon)
 			
 			# Final settings and start render
 			input3 = layout.column(align=True)
