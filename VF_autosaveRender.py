@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 6, 0),
+	"version": (2, 6, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -1772,14 +1772,14 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			original_active = context.view_layer.objects.active
 			
 			# If items are selected
-			if len(context.selected_objects) > 0:
+			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type != 'CAMERA']) > 0:
 				# Save selection and active item
 				original_selection = [obj for obj in context.selected_objects]
-				source_items = original_selection
+				source_items = [obj for obj in context.selected_objects if obj.type != 'CAMERA']
 				
 			# If no items are selected, check for an active collection
-			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0:
-				source_items = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects]
+			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']) > 0:
+				source_items = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']
 				
 			# If still no items are available, return cancelled
 			else:
@@ -1950,7 +1950,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 			# Settings for Items
 			if context.scene.autosave_render_settings.batch_type == 'itms':
 				# Direct selection of items
-				batch_count = len(context.selected_objects)
+				batch_count = len([obj for obj in context.selected_objects if obj.type != 'CAMERA'])
 				
 				# Set up feedback message for selected items
 				if batch_count > 0:
@@ -1959,14 +1959,16 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					else:
 						feedback_text=str(batch_count) + ' items selected'
 					feedback_icon='OBJECT_DATA'
+				
 				# If no items are selected, check for an active collection
-				elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0:
-					batch_count = len(context.view_layer.active_layer_collection.collection.all_objects)
+				elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']) > 0:
+					batch_count = len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA'])
 					if batch_count == 1:
 						feedback_text=str(batch_count) + ' item in collection'
 					else:
 						feedback_text=str(batch_count) + ' items in collection'
 					feedback_icon='OUTLINER_COLLECTION'
+				
 				# If still no items are selected, display an error
 				else:
 					feedback_text='Invalid selection'
