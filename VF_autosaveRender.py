@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 6, 2),
+	"version": (2, 6, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -645,9 +645,11 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
 				else:
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+	
 	# Set node name to the Batch Render Target if active and available
 	if bpy.context.scene.autosave_render_settings.batch_active and bpy.context.scene.autosave_render_settings.batch_type == 'imgs' and bpy.data.materials.get(bpy.context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node):
 		projectNode = bpy.data.materials[bpy.context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(bpy.context.scene.autosave_render_settings.batch_images_node).image.name
+	
 	# Remove file extension from image node names (this could be unhelpful when comparing renders with .psd versus .jpg texture sources)
 	projectNode = sub(r'\.\w{3,4}$', '', projectNode)
 	
@@ -655,7 +657,8 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	# Project variables
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", bpy.context.scene.name)
-	string = string.replace("{collection}", bpy.context.collection.name)
+	string = string.replace("{collection}", bpy.context.scene.autosave_render_settings.batch_collection_name if len(bpy.context.scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name)
+#	string = string.replace("{collection}", bpy.context.view_layer.active_layer_collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", projectItem)
 	string = string.replace("{material}", projectMaterial)
@@ -1328,10 +1331,16 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		default='anim')
 	
 	# Batch cameras
+	# Uses the active camera for output variables
 	
 	# Batch collections
+	batch_collection_name: bpy.props.StringProperty(
+		name="Collection Name",
+		description="Name of the collection currently being rendered (bypasses view_layer settings that aren't updated during processing)",
+		default="")
 	
 	# Batch items
+	# Uses the active item for output variables
 	
 	# Batch images
 	batch_images_location: bpy.props.StringProperty(
@@ -1731,6 +1740,8 @@ class VF_autosave_render_batch(bpy.types.Operator):
 				
 			# If still no cameras are available, return cancelled
 			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Cameras not found.')
 				return {'CANCELLED'}
 			
 			# Reset batch index value
@@ -1758,27 +1769,82 @@ class VF_autosave_render_batch(bpy.types.Operator):
 		
 		
 		# Batch render collections
-#		if context.scene.autosave_render_settings.batch_type == 'cols':
-		
-			# Reset batch index value
-#			context.scene.autosave_render_settings.batch_index = 0
+		if context.scene.autosave_render_settings.batch_type == 'cols':
+			# If we need to support direct selection of multiple collections...
+			# https://blender.stackexchange.com/questions/249139/selecting-a-collection-via-python
+			# ...but for now I'm keeping this initial release simpler
 			
-			# Render each item in the list
-#			for col in source_collections:
-				# Set current collection to active
+			# Preserve active collection
+#			original_active = context.view_layer.active_layer_collection
+			# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
+			
+			# If child collections exist
+			if len(context.view_layer.active_layer_collection.children) > 0:
+				source_collections = [col for col in context.view_layer.active_layer_collection.children]
+			
+			# If no collections are available, return cancelled
+			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Collections not found.')
+				return {'CANCELLED'}
+			
+			# Store the render status of each collection and disable
+			source_collections_hidden = []
+			source_collections_excluded = []
+			for col in source_collections:
+				# Using both exclude and hide_render status to ensure each collection is for-sure enabled when rendering
+				source_collections_hidden.append(col.collection.hide_render)
+				source_collections_excluded.append(col.exclude)
+				col.collection.hide_render = True
+				col.exclude = True
+				
+			print('hidden status:')
+			print(dir(source_collections_hidden))
+			print('excluded status:')
+			print(dir(source_collections_excluded))
+			
+			# Reset batch index value
+			context.scene.autosave_render_settings.batch_index = 0
+			
+			# Render each collection in the list
+			for col in source_collections:
+				# Set current collection name
+				context.scene.autosave_render_settings.batch_collection_name = col.name
+				
+				# Set current collection to active and renderable
+#				bpy.context.view_layer.active_layer_collection = col
+				# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
+				col.collection.hide_render = False
+				col.exclude = False
 				
 				# Render
-#				if context.scene.autosave_render_settings.batch_range == 'img':
+				if context.scene.autosave_render_settings.batch_range == 'img':
 					# Render Still
-#					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
-#				else:
+					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+				else:
 					# Sequence
-#					bpy.ops.render.render(animation=True, use_viewport=True)
-				
-				# Disable the collection
+					bpy.ops.render.render(animation=True, use_viewport=True)
+					
+				# Disable the collection again
+				col.collection.hide_render = True
+				col.exclude = True
 				
 				# Increment index value
-#				context.scene.autosave_render_settings.batch_index += 1
+				context.scene.autosave_render_settings.batch_index += 1
+				
+			# Restore enabled status
+			if len(source_collections_hidden) > 0 and len(source_collections_hidden) == len(source_collections_excluded):
+				for i, col in enumerate(source_collections):
+					col.collection.hide_render = source_collections_hidden[i]
+					col.exclude = source_collections_excluded[i]
+			
+			# Reset batch rendering variable
+			context.scene.autosave_render_settings.batch_collection_name = ''
+			
+			# Restore original active collection
+#			if original_active:
+#				context.view_layer.active_layer_collection = original_active
+			# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
 		
 		
 		
@@ -1800,6 +1866,8 @@ class VF_autosave_render_batch(bpy.types.Operator):
 				
 			# If still no items are available, return cancelled
 			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Items not found.')
 				return {'CANCELLED'}
 			
 			# Store the render status of each object and disable rendering
@@ -1990,10 +2058,32 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 			
+			
+			
 			# Settings for Collections
-#			if context.scene.autosave_render_settings.batch_type == 'cols':
-				# Direct selection or collections in current collection (single heriarchical level)
+			# len(context.view_layer.active_layer_collection.children)
+			if context.scene.autosave_render_settings.batch_type == 'cols':
+				# Collection children (no direct selection of collections currently supported)
+				batch_count = len(context.view_layer.active_layer_collection.children)
+				
+				# Set up feedback message for child collections
+				if batch_count > 0:
+					if batch_count == 1:
+						feedback_text=str(batch_count) + ' sub-collection available'
+					else:
+						feedback_text=str(batch_count) + ' sub-collections available'
+					feedback_icon='OUTLINER_COLLECTION'
+					
+				# If no collections are available, display an error
+				else:
+					feedback_text='Invalid selection'
+					feedback_icon='ERROR'
+					
 				# Display feedback
+				feedback = input0.box()
+				feedback.label(text=feedback_text, icon=feedback_icon)
+			
+			
 			
 			# Settings for Items
 			if context.scene.autosave_render_settings.batch_type == 'itms':
@@ -2025,6 +2115,8 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				# Display feedback
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
+			
+			
 			
 			# Settings for Images
 			if context.scene.autosave_render_settings.batch_type == 'imgs':
@@ -2067,6 +2159,8 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					batch_error = True
 				feedback = input2.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
+			
+			
 			
 			# Final settings and start render
 			input3 = layout.column(align=True)
