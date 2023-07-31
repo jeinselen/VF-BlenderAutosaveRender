@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 6, 1),
+	"version": (2, 6, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -1717,27 +1717,45 @@ class VF_autosave_render_batch(bpy.types.Operator):
 		original_batch_index = context.scene.autosave_render_settings.batch_index
 		
 		# Batch render cameras
-#		if context.scene.autosave_render_settings.batch_type == 'cams':
+		if context.scene.autosave_render_settings.batch_type == 'cams':
+			# Preserve original active camera
+			original_camera = bpy.context.scene.camera
+			
+			# If cameras are selected
+			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type == 'CAMERA']) > 0:
+				source_cameras = [obj for obj in context.selected_objects if obj.type == 'CAMERA']
+				
+			# If no cameras are selected, check for an active collection with cameras
+			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']) > 0:
+				source_cameras = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']
+				
+			# If still no cameras are available, return cancelled
+			else:
+				return {'CANCELLED'}
 			
 			# Reset batch index value
-#			context.scene.autosave_render_settings.batch_index = 0
-	
-			# Render each item in the list
-#			for col in source_collections:
-				# Set current collection to active
-	
+			context.scene.autosave_render_settings.batch_index = 0
+			
+			# Render each camera in the list
+			for cam in source_cameras:
+				# Set rendering camera to current camera
+				bpy.context.scene.camera = cam
+				
 				# Render
-#				if context.scene.autosave_render_settings.batch_range == 'img':
+				if context.scene.autosave_render_settings.batch_range == 'img':
 					# Render Still
-#					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
-#				else:
+					bpy.ops.render.render(animation=False, write_still=True, use_viewport=True)
+				else:
 					# Sequence
-#					bpy.ops.render.render(animation=True, use_viewport=True)
-	
-				# Disable the collection
-	
+					bpy.ops.render.render(animation=True, use_viewport=True)
+				
 				# Increment index value
-#				context.scene.autosave_render_settings.batch_index += 1
+				context.scene.autosave_render_settings.batch_index += 1
+				
+			# Restore original active camera
+			bpy.context.scene.camera = original_camera
+		
+		
 		
 		# Batch render collections
 #		if context.scene.autosave_render_settings.batch_type == 'cols':
@@ -1756,28 +1774,27 @@ class VF_autosave_render_batch(bpy.types.Operator):
 #				else:
 					# Sequence
 #					bpy.ops.render.render(animation=True, use_viewport=True)
-					
+				
 				# Disable the collection
 				
 				# Increment index value
 #				context.scene.autosave_render_settings.batch_index += 1
-			
+		
+		
 		
 		# Batch render items
 		if context.scene.autosave_render_settings.batch_type == 'itms':
-			# Set up selection and render status variables for restoration later
-			original_selection = False
+			# Preserve original item selection
+			original_selection = [obj for obj in context.selected_objects]
 			
-			# Save active item
+			# Preserve active item
 			original_active = context.view_layer.objects.active
 			
-			# If items are selected
+			# If non-camera items are selected
 			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type != 'CAMERA']) > 0:
-				# Save selection and active item
-				original_selection = [obj for obj in context.selected_objects]
 				source_items = [obj for obj in context.selected_objects if obj.type != 'CAMERA']
 				
-			# If no items are selected, check for an active collection
+			# If no items are selected, check for an active collection with non-camera items
 			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']) > 0:
 				source_items = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']
 				
@@ -1817,19 +1834,21 @@ class VF_autosave_render_batch(bpy.types.Operator):
 				# Increment index value
 				context.scene.autosave_render_settings.batch_index += 1
 			
-			# Restpore render status
+			# Restore render status
 			if len(source_items_hidden) > 0:
 				for i, obj in enumerate(source_items):
 					obj.hide_render = source_items_hidden[i]
 			
-			# Restore selection
+			# Restore original selection
 			if original_selection:
 				for obj in original_selection:
 					obj.select_set(True)
 			
-			# Restore active item
+			# Restore original active item
 			if original_active:
 				context.view_layer.objects.active = original_active
+		
+		
 		
 		# Batch render images
 		if context.scene.autosave_render_settings.batch_type == 'imgs':
@@ -1889,6 +1908,8 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			if original_image:
 				target.image = original_image
 		
+		
+		
 		# Restore manually entered batch index
 		context.scene.autosave_render_settings.batch_index = original_batch_index
 		
@@ -1938,9 +1959,36 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 			input2 = layout.column(align=True)
 			
 			# Settings for Cameras
-#			if context.scene.autosave_render_settings.batch_type == 'cams':
-				# Direct selection or cameras in collection
+			if context.scene.autosave_render_settings.batch_type == 'cams':
+				# Direct selection of cameras
+				batch_count = len([obj for obj in context.selected_objects if obj.type == 'CAMERA'])
+				
+				# Set up feedback message for selected cameras
+				if batch_count > 0:
+					if batch_count == 1:
+						feedback_text=str(batch_count) + ' camera selected'
+					else:
+						feedback_text=str(batch_count) + ' cameras selected'
+#					feedback_icon='VIEW_CAMERA'
+					feedback_icon='CAMERA_DATA'
+				
+				# If no cameras are selected, check for an active collection
+				elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']) > 0:
+					batch_count = len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA'])
+					if batch_count == 1:
+						feedback_text=str(batch_count) + ' camera in collection'
+					else:
+						feedback_text=str(batch_count) + ' cameras in collection'
+					feedback_icon='OUTLINER_COLLECTION'
+				
+				# If still no items are selected, display an error
+				else:
+					feedback_text='Invalid selection'
+					feedback_icon='ERROR'
+					
 				# Display feedback
+				feedback = input0.box()
+				feedback.label(text=feedback_text, icon=feedback_icon)
 			
 			# Settings for Collections
 #			if context.scene.autosave_render_settings.batch_type == 'cols':
