@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 6, 3),
+	"version": (2, 6, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -1386,13 +1386,20 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 			bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing
 			# Check if the FFmpeg appears to be valid
 			and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists
-			# Check if the output format is supported by FFmpeg
-			and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS
 		)
 	
 	def draw(self, context):
 		layout = self.layout
 		layout.use_property_decorate = False  # No animation
+		
+		# Check if the output format is supported by FFmpeg
+		if not bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS:
+			error = layout.box()
+			error.label(text='"' + bpy.context.scene.render.image_settings.file_format + '" output format is not supported by FFmpeg')
+			error.label(text="Supported image formats: " + ', '.join(FFMPEG_FORMATS))
+			layout = layout.column()
+			layout.active = False
+			layout.enabled = False
 		
 		# Variable list popup button
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
