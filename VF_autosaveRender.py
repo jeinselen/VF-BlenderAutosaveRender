@@ -1,13 +1,13 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 1),
+	"version": (2, 7, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
 	"warning": "inexperienced developer, use at your own risk",
-	"wiki_url": "",
-	"tracker_url": "",
+	"doc_url": "https://github.com/jeinselenVF/VF-BlenderAutosaveRender",
+	"tracker_url": "https://github.com/jeinselenVF/VF-BlenderAutosaveRender/issues",
 	"category": "Render"}
 
 import bpy
@@ -783,13 +783,13 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description="Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
 		default=True)
 	show_autosave_render_overrides: bpy.props.BoolProperty(
-		name="Show Overrides",
+		name="Global Overrides",
 		description="Show available global overrides, replacing local project settings",
 		default=False)
 	
 	# Override individual project autosave location and file name settings
 	file_location_override: bpy.props.BoolProperty(
-		name="File Location",
+		name="Override File Location",
 		description='Global override for the per-project directory setting',
 		default=False)
 	file_location_global: bpy.props.StringProperty(
@@ -800,7 +800,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		subtype="DIR_PATH")
 	
 	file_name_override: bpy.props.BoolProperty(
-		name="File Name",
+		name="Override File Name",
 		description='Global override for the per-project autosave file name setting',
 		default=False)
 	file_name_type_global: bpy.props.EnumProperty(
@@ -823,7 +823,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		description="Current serial number, automatically increments with every render (must be manually updated when installing a plugin update)")
 	
 	file_format_override: bpy.props.BoolProperty(
-		name="File Format",
+		name="Override File Format",
 		description='Global override for the per-project autosave file format setting',
 		default=False)
 	file_format_global: bpy.props.EnumProperty(
@@ -1015,21 +1015,22 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		if self.file_location_override or self.file_name_override or self.file_format_override or not self.enable_autosave_render:
 			input.separator()
 		elif self.show_autosave_render_overrides:
-			# Hide Global Autosave Overrides
-			input.prop(self, "show_autosave_render_overrides", text = "Global Overrides", icon = "DISCLOSURE_TRI_DOWN", emboss = False)
+			input.prop(self, "show_autosave_render_overrides", icon = "DISCLOSURE_TRI_DOWN", emboss = False)
 		else:
-			# Show Global Autosave Overrides
-			input.prop(self, "show_autosave_render_overrides", text = "Global Overrides", icon = "DISCLOSURE_TRI_RIGHT", emboss = False)
+			input.prop(self, "show_autosave_render_overrides", icon = "DISCLOSURE_TRI_RIGHT", emboss = False)
 		input.separator()
 		
 		# Autosave Images - Global Overrides Section
 		if (self.show_autosave_render_overrides or self.file_location_override or self.file_name_override or self.file_format_override) and self.enable_autosave_render:
+			# Subgrid Layout
+			margin = layout.row()
+			margin.separator(factor=2.0)
+			subgrid = margin.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+			margin.separator(factor=2.0)
 			
 			# File location
-			override = grid1.row()
-			override.separator()
-			override.prop(self, "file_location_override")
-			input = grid1.column(align=True)
+			subgrid.prop(self, "file_location_override")
+			input = subgrid.column(align=True)
 			if not self.file_location_override:
 				input.active = False
 				input.enabled = False
@@ -1040,10 +1041,8 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 				input.separator()
 			
 			# File name
-			override = grid1.row()
-			override.separator()
-			override.prop(self, "file_name_override")
-			input = grid1.column(align=True)
+			subgrid.prop(self, "file_name_override")
+			input = subgrid.column(align=True)
 			if not self.file_name_override:
 				input.active = False
 				input.enabled = False
@@ -1055,10 +1054,8 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 				input.separator()
 			
 			# File format
-			override = grid1.row()
-			override.separator()
-			override.prop(self, "file_format_override")
-			input = grid1.column()
+			subgrid.prop(self, "file_format_override")
+			input = subgrid.column()
 			if not self.file_format_override:
 				input.active = False
 				input.enabled = False
@@ -1069,7 +1066,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 				error.label(text="Report: https://developer.blender.org/T71087")
 		
 	# Render Time Data
-		layout.separator(factor = 1.5)
+		layout.separator(factor = 2.0)
 		grid2 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		
 		# Render time preferences
@@ -1091,7 +1088,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		input.prop(self, "external_log_name", text='')
 		
 	# Render Completed Notifications
-		layout.separator(factor = 1.5)
+		layout.separator(factor = 2.0)
 		grid3 = layout.grid_flow(row_major=True, columns=1, even_columns=True, even_rows=False, align=False)
 		
 		# Minimum render time before notifications are enabled
@@ -1102,67 +1099,76 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Email notifications
 		grid3.prop(self, "email_enable")
 		if self.email_enable:
-			# Layout
-			settings1 = grid3.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
-			settings2 = grid3.row()
+			# Subgrid Layout
+			margin = grid3.row()
+			margin.separator(factor=2.0)
+			subgrid = margin.column()
+			margin.separator(factor=2.0)
 			
 			# Account
-			column1 = settings1.column()
-			row1 = column1.row()
-			row1.separator() # Silly overcomplication to split the grid with global alignment but still offset the left most column
-			col1 = row1.column(align=True)
-			col1.prop(self, "email_server", text="", icon="EXPORT")
-			col1.prop(self, "email_port")
-			
+			settings1 = subgrid.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+			column1 = settings1.column(align=True)
+			column1.label(text="Server")
+			column1.prop(self, "email_server", text="", icon="EXPORT")
+			column1.prop(self, "email_port")
 			column2 = settings1.column(align=True)
+			column2.label(text="Account")
 			column2.prop(self, "email_from", text="", icon="USER")
 			column2.prop(self, "email_password", text="", icon="LOCKED")
 			
 			# Message
-			settings2.separator() # Left most column spacer
-			column = settings2.column(align=True)
-			column.separator()
-			column.prop(self, "email_to", text="", icon="USER")
-			column.prop(self, "email_subject", text="", icon="FILE_TEXT")
-			column.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
+			subgrid.separator(factor=0.5)
+			settings2 = subgrid.column(align=True)
+			settings2.label(text="Message")
+			settings2.prop(self, "email_to", text="", icon="USER")
+			settings2.prop(self, "email_subject", text="", icon="FILE_TEXT")
+			settings2.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
 			
-			grid3.separator()
+			# Spacing
+			subgrid.separator(factor=2.0)
 		
 		# Pushover notifications
 		grid3.prop(self, "pushover_enable")
 		if self.pushover_enable:
-			# Layout
-			column = grid3.column(align=True)
-			row = column.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=True)
+			# Subgrid Layout
+			margin = grid3.row()
+			margin.separator(factor=2.0)
+			subgrid = margin.column()
+			margin.separator(factor=2.0)
 			
 			# Account
-			column1 = row.row(align=True)
-			column1.separator()
-			column1.separator()
-			column1.prop(self, "pushover_key", text="", icon="USER")
+			settings1 = subgrid.column(align=True)
+			settings1.label(text="Account")
+			row = settings1.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=True)
+			row.prop(self, "pushover_key", text="", icon="USER")
 			row.prop(self, "pushover_app", text="", icon="MODIFIER_DATA")
 			
-			# Message
-			spaced = column.row(align=True)
-			spaced.separator()
-			spaced.separator()
-			column1 = spaced.column(align=True)
-			column1.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
-			column1.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
-			
 			if self.pushover_enable and (len(self.pushover_key) != 30 or len(self.pushover_app) != 30):
-				column1.separator()
-				warning = column1.box()
-				warning.label(text='Please enter valid 30-character user and app API keys', icon="ERROR")
+				warning = settings1.box()
+				warning.label(text='Please enter 30-character API strings for both user key and app token', icon="ERROR")
 			
-			grid3.separator(factor = 1.5)
+			# Message
+			subgrid.separator(factor=0.5)
+			settings2 = subgrid.column(align=True)
+			settings2.label(text="Message")
+			settings2.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
+			settings2.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
+			
+			# Spacing
+			subgrid.separator(factor = 2.0)
 		
 		# Apple MacOS Siri text-to-speech announcement
-		row4 = grid3.column()
 		if self.macos_say_exists:
-			row4.prop(self, "macos_say_enable")
+			grid3.prop(self, "macos_say_enable")
 			if self.macos_say_enable:
-				row4.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
+				# Subgrid Layout
+				margin = grid3.row()
+				margin.separator(factor=2.0)
+				subgrid = margin.column()
+				margin.separator(factor=2.0)
+				
+				# Message
+				subgrid.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
 
 
 
