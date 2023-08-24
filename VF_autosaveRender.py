@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 0),
+	"version": (2, 7, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -872,7 +872,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
 	# Render Time Tracking
-	remaining_render_time: bpy.props.BoolProperty(
+	show_estimated_render_time: bpy.props.BoolProperty(
 		name="Show Estimated Render Time",
 		description='Adds estimated remaining render time display to the image editor menu bar while rendering',
 		default=True)
@@ -988,21 +988,21 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	def draw(self, context):
 		layout = self.layout
 	
-	# Preferences:
+	# General Preferences:
+		grid1 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+		
 		# Output variables
-		grid1 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
 		grid1.prop(self, "render_output_variables")
 		ops = grid1.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
 		ops.rendertime = True
 		
 		# Autosave Videos - FFmpeg Sequencing
 		grid1.prop(self, "ffmpeg_processing")
-		input = grid1.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		input = grid1.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		if not self.ffmpeg_processing:
 			input.active = False
 			input.enabled = False
 		input.prop(self, "ffmpeg_location", text="")
-		
 		# Location exists success/fail
 		if self.ffmpeg_exists:
 			input.label(text="✔︎ installed")
@@ -1011,7 +1011,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		
 		# Autosave Images
 		grid1.prop(self, "enable_autosave_render")
-		input = grid1.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		input = grid1.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		if self.file_location_override or self.file_name_override or self.file_format_override or not self.enable_autosave_render:
 			input.separator()
 		elif self.show_autosave_render_overrides:
@@ -1022,124 +1022,147 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			input.prop(self, "show_autosave_render_overrides", text = "Global Overrides", icon = "DISCLOSURE_TRI_RIGHT", emboss = False)
 		input.separator()
 		
-		# Autosave Images Overrides
+		# Autosave Images - Global Overrides Section
 		if (self.show_autosave_render_overrides or self.file_location_override or self.file_name_override or self.file_format_override) and self.enable_autosave_render:
 			
-			# Serial number display
-			grid1.separator()
-			col = grid1.column(align=True)
-			if not ((self.file_name_override and self.file_name_type_global == 'CUSTOM' and '{serial}' in self.file_name_custom_global) or (self.file_location_override and '{serial}' in self.file_location_global)):
-				col.active = False
-				col.enabled = False
-			col.prop(self, "file_serial_global")
-			
 			# File location
-			row = grid1.row()
-			row.separator()
-			row.prop(self, "file_location_override")
-			col = grid1.column(align=True)
+			override = grid1.row()
+			override.separator()
+			override.prop(self, "file_location_override")
+			input = grid1.column(align=True)
 			if not self.file_location_override:
-				col.active = False
-				col.enabled = False
-			col.prop(self, "file_location_global", text='')
+				input.active = False
+				input.enabled = False
+			input.prop(self, "file_location_global", text='')
+			# Display global serial number if used
+			if self.file_location_override and '{serial}' in self.file_location_global:
+				input.prop(self, "file_serial_global")
+				input.separator()
 			
 			# File name
-			row = grid1.row()
-			row.separator()
-			row.prop(self, "file_name_override")
-			col = grid1.column()
+			override = grid1.row()
+			override.separator()
+			override.prop(self, "file_name_override")
+			input = grid1.column(align=True)
 			if not self.file_name_override:
-				col.active = False
-				col.enabled = False
-			colrow = col.row()
-			colrow.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
-			colrow = col.row()
+				input.active = False
+				input.enabled = False
+			input.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
 			if (self.file_name_type_global == 'CUSTOM'):
-				colrow.prop(self, "file_name_custom_global", text='')
+				input.prop(self, "file_name_custom_global", text='')
+				if self.file_name_override and self.file_name_type_global == 'CUSTOM' and '{serial}' in self.file_name_custom_global:
+					input.prop(self, "file_serial_global")
+				input.separator()
 			
 			# File format
-			row = grid1.row()
-			row.separator()
-			row.prop(self, "file_format_override")
-			col = grid1.column()
+			override = grid1.row()
+			override.separator()
+			override.prop(self, "file_format_override")
+			input = grid1.column()
 			if not self.file_format_override:
-				col.active = False
-				col.enabled = False
-			col.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
+				input.active = False
+				input.enabled = False
+			input.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
 			if self.file_format_override and self.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
-				error = col.box()
+				error = input.box()
 				error.label(text="Python API can only save single layer EXR files")
 				error.label(text="Report: https://developer.blender.org/T71087")
 		
-		# Space
-		grid1.separator(factor = 4.0)
-		grid1.separator(factor = 4.0)
+	# Render Time Data
+		layout.separator(factor = 1.5)
+		grid2 = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 		
 		# Render time preferences
-		grid1.prop(self, "remaining_render_time")
-		grid1.separator()
+		grid2.prop(self, "show_estimated_render_time")
+		grid2.separator()
 		
-		grid1.prop(self, "show_total_render_time")
-		input = grid1.row()
+		grid2.prop(self, "show_total_render_time")
+		input = grid2.column()
 		if not self.show_total_render_time:
 			input.active = False
 			input.enabled = False
 		input.prop(context.scene.autosave_render_settings, 'total_render_time')
 		
-		grid1.prop(self, "external_render_time")
-		input1 = grid1.row()
+		grid2.prop(self, "external_render_time")
+		input = grid2.column()
 		if not self.external_render_time:
-			input1.active = False
-			input1.enabled = False
-		input1.prop(self, "external_log_name", text='')
+			input.active = False
+			input.enabled = False
+		input.prop(self, "external_log_name", text='')
 		
-		# Space
-		grid1.separator(factor = 4.0)
-		grid1.separator(factor = 4.0)
+	# Render Completed Notifications
+		layout.separator(factor = 1.5)
+		grid3 = layout.grid_flow(row_major=True, columns=1, even_columns=True, even_rows=False, align=False)
 		
-		# Notifications
-		grid1.label(text="Render Complete Notifications")
-		grid1.prop(self, "minimum_time", icon="TIME")
-		col = layout.column()
+		# Minimum render time before notifications are enabled
+		row1 = grid3.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+		row1.label(text="Render Completed Notifications")
+		row1.prop(self, "minimum_time", icon="TIME")
 		
 		# Email notifications
-		col.prop(self, "email_enable")
+		grid3.prop(self, "email_enable")
 		if self.email_enable:
-			settings1 = col.row(align=False)
-			settings2 = col.row(align=False)
+			# Layout
+			settings1 = grid3.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
+			settings2 = grid3.row()
 			
-			column1 = settings1.column(align=True)
-			column1.prop(self, "email_server", text="", icon="EXPORT")
-			column1.prop(self, "email_port")
+			# Account
+			column1 = settings1.column()
+			row1 = column1.row()
+			row1.separator() # Silly overcomplication to split the grid with global alignment but still offset the left most column
+			col1 = row1.column(align=True)
+			col1.prop(self, "email_server", text="", icon="EXPORT")
+			col1.prop(self, "email_port")
 			
 			column2 = settings1.column(align=True)
 			column2.prop(self, "email_from", text="", icon="USER")
 			column2.prop(self, "email_password", text="", icon="LOCKED")
 			
+			# Message
+			settings2.separator() # Left most column spacer
 			column = settings2.column(align=True)
+			column.separator()
 			column.prop(self, "email_to", text="", icon="USER")
 			column.prop(self, "email_subject", text="", icon="FILE_TEXT")
 			column.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
 			
+			grid3.separator()
+		
 		# Pushover notifications
-		col.prop(self, "pushover_enable")
+		grid3.prop(self, "pushover_enable")
 		if self.pushover_enable:
-			column = col.column(align=True)
-			row = column.row(align=True)
-			row.prop(self, "pushover_key", text="", icon="USER")
+			# Layout
+			column = grid3.column(align=True)
+			row = column.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=True)
+			
+			# Account
+			column1 = row.row(align=True)
+			column1.separator()
+			column1.separator()
+			column1.prop(self, "pushover_key", text="", icon="USER")
 			row.prop(self, "pushover_app", text="", icon="MODIFIER_DATA")
-			column.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
-			column.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
+			
+			# Message
+			spaced = column.row(align=True)
+			spaced.separator()
+			spaced.separator()
+			column1 = spaced.column(align=True)
+			column1.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
+			column1.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
 			
 			if self.pushover_enable and (len(self.pushover_key) != 30 or len(self.pushover_app) != 30):
-				warning = col.box()
+				column1.separator()
+				warning = column1.box()
 				warning.label(text='Please enter valid 30-character user and app API keys', icon="ERROR")
+			
+			grid3.separator(factor = 1.5)
 		
 		# Apple MacOS Siri text-to-speech announcement
+		row4 = grid3.column()
 		if self.macos_say_exists:
-			col.prop(self, "macos_say_enable")
+			row4.prop(self, "macos_say_enable")
 			if self.macos_say_enable:
-				col.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
+				row4.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
 
 
 
@@ -1646,7 +1669,7 @@ def RENDER_PT_total_render_time_display(self, context):
 
 def image_viewer_feedback_display(self, context):
 	# Estimated render time remaining
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.remaining_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_estimated_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
 		self.layout.separator()
 		box = self.layout.box()
 		box.label(text="  Estimated Time Remaining: " + bpy.context.scene.autosave_render_settings.estimated_render_time_value + " ")
