@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 6, 4),
+	"version": (2, 7, 0),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -87,7 +87,7 @@ def autosave_render_start(scene):
 	bpy.context.scene.autosave_render_settings.output_file_serial_used = False
 	
 	# Filter output file path if enabled
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables:
 		# Save original file path
 		bpy.context.scene.autosave_render_settings.output_file_path = filepath = scene.render.filepath
 		
@@ -100,7 +100,7 @@ def autosave_render_start(scene):
 		scene.render.filepath = replaceVariables(filepath)
 		
 	# Filter compositing node file path if turned on in the plugin settings and compositing is enabled
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes and bpy.context.scene.use_nodes:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables and bpy.context.scene.use_nodes:
 		# Iterate through Compositor nodes, adding all file output node path and sub-path variables to a dictionary
 		node_settings = {}
 		for node in bpy.context.scene.node_tree.nodes:
@@ -323,11 +323,11 @@ def autosave_render(scene):
 	bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = False
 	
 	# Restore unprocessed file path if processing is enabled
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path and bpy.context.scene.autosave_render_settings.output_file_path:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables and bpy.context.scene.autosave_render_settings.output_file_path:
 		scene.render.filepath = bpy.context.scene.autosave_render_settings.output_file_path
 	
 	# Restore unprocessed node output file path if processing is enabled, compositing is enabled, and a file output node exists with the default node name
-	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes and bpy.context.scene.use_nodes and len(bpy.context.scene.autosave_render_settings.output_file_nodes) > 2:
+	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables and bpy.context.scene.use_nodes and len(bpy.context.scene.autosave_render_settings.output_file_nodes) > 2:
 		
 		# Get the JSON data from the preferences string where it was stashed
 		json_data = bpy.context.scene.autosave_render_settings.output_file_nodes
@@ -349,7 +349,7 @@ def autosave_render(scene):
 	projectname = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
 	
 	# Autosave render
-	if (bpy.context.scene.autosave_render_settings.enable_autosave_render or bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override) and bpy.data.filepath:
+	if (bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render) and bpy.data.filepath:
 		
 		# Save original file format settings
 		original_format = scene.render.image_settings.file_format
@@ -772,38 +772,22 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	bl_idname = __name__
 
 	# Global Variables
-	filter_output_file_path: bpy.props.BoolProperty(
-		name='Render Output Variables',
-		description='Implements most of the same keywords used in the custom naming scheme in the Output directory',
+	render_output_variables: bpy.props.BoolProperty(
+		name='Render Variables',
+		description='Implements dynamic keywords in the Output directory and Compositing tab "File Output" nodes',
 		default=True)
-	filter_output_file_nodes: bpy.props.BoolProperty(
-		name='File Output Node Variables',
-		description='Implements most of the same keywords used in the custom naming scheme in Compositing tab "File Output" nodes',
+	
+	# Autosave Images
+	enable_autosave_render: bpy.props.BoolProperty(
+		name="Autosave Images",
+		description="Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
 		default=True)
-	remaining_render_time: bpy.props.BoolProperty(
-		name="Estimate Remaining Render Time",
-		description='Adds estimated remaining render time display to the image editor menu',
-		default=True)
-	show_total_render_time: bpy.props.BoolProperty(
-		name="Show Project Render Time",
-		description='Displays the total time spent rendering a project in the output panel',
-		default=True)
-	external_render_time: bpy.props.BoolProperty(
-		name="Save External Render Time Log",
-		description='Saves the total time spent rendering to an external log file',
+	show_autosave_render_overrides: bpy.props.BoolProperty(
+		name="Show Overrides",
+		description="Show available global overrides, replacing local project settings",
 		default=False)
-	external_log_name: bpy.props.StringProperty(
-		name="File Name",
-		description="Log file name; use {project} for per-project tracking, remove it for per-directory tracking",
-		default="{project}-TotalRenderTime.txt",
-		maxlen=4096)
 	
 	# Override individual project autosave location and file name settings
-	enable_autosave_render_override: bpy.props.BoolProperty(
-		name="Always Autosave",
-		description="Globally enables autosaving renders regardless of individual project settings",
-		default=False)
-	
 	file_location_override: bpy.props.BoolProperty(
 		name="File Location",
 		description='Global override for the per-project directory setting',
@@ -853,9 +837,9 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			],
 		default='PNG')
 	
-	# FFMPEG output processing
+	# Autosave Videos - FFMPEG output processing
 	ffmpeg_processing: bpy.props.BoolProperty(
-		name='Enable Autosave Video',
+		name='Autosave Videos',
 		description='Enables FFmpeg image sequence compilation options in the Output panel',
 		default=True)
 	ffmpeg_location: bpy.props.StringProperty(
@@ -887,9 +871,28 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 				self.ffmpeg_exists = True
 			self.ffmpeg_location_previous = self.ffmpeg_location
 	
+	# Render Time Tracking
+	remaining_render_time: bpy.props.BoolProperty(
+		name="Show Estimated Render Time",
+		description='Adds estimated remaining render time display to the image editor menu bar while rendering',
+		default=True)
+	show_total_render_time: bpy.props.BoolProperty(
+		name="Show Project Render Time",
+		description='Displays the total time spent rendering a project in the output panel',
+		default=True)
+	external_render_time: bpy.props.BoolProperty(
+		name="Save External Render Time Log",
+		description='Saves the total time spent rendering to an external log file',
+		default=False)
+	external_log_name: bpy.props.StringProperty(
+		name="File Name",
+		description="Log file name; use {project} for per-project tracking, remove it for per-directory tracking",
+		default="{project}-TotalRenderTime.txt",
+		maxlen=4096)
+	
 	# Render Complete Notifications
 	minimum_time: bpy.props.IntProperty(
-		name="Minimum Time",
+		name="Minimum Render Time",
 		description="Minimum rendering time required before notifications will be enabled, in seconds",
 		default=300)
 	
@@ -986,15 +989,96 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		layout = self.layout
 	
 	# Preferences:
-		grid0 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		grid0.prop(self, "filter_output_file_path")
-		grid0.prop(self, "filter_output_file_nodes")
-		
-	# Render Time:
-		layout.separator()
-		layout.label(text="Render Time:")
-		
+		# Output variables
 		grid1 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		grid1.prop(self, "render_output_variables")
+		ops = grid1.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
+		ops.rendertime = True
+		
+		# Autosave Videos - FFmpeg Sequencing
+		grid1.prop(self, "ffmpeg_processing")
+		input = grid1.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		if not self.ffmpeg_processing:
+			input.active = False
+			input.enabled = False
+		input.prop(self, "ffmpeg_location", text="")
+		
+		# Location exists success/fail
+		if self.ffmpeg_exists:
+			input.label(text="✔︎ installed")
+		else:
+			input.label(text="✘ missing")
+		
+		# Autosave Images
+		grid1.prop(self, "enable_autosave_render")
+		input = grid1.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
+		if self.file_location_override or self.file_name_override or self.file_format_override or not self.enable_autosave_render:
+			input.separator()
+		elif self.show_autosave_render_overrides:
+			# Hide Global Autosave Overrides
+			input.prop(self, "show_autosave_render_overrides", text = "Global Overrides", icon = "DISCLOSURE_TRI_DOWN", emboss = False)
+		else:
+			# Show Global Autosave Overrides
+			input.prop(self, "show_autosave_render_overrides", text = "Global Overrides", icon = "DISCLOSURE_TRI_RIGHT", emboss = False)
+		input.separator()
+		
+		# Autosave Images Overrides
+		if (self.show_autosave_render_overrides or self.file_location_override or self.file_name_override or self.file_format_override) and self.enable_autosave_render:
+			
+			# Serial number display
+			grid1.separator()
+			col = grid1.column(align=True)
+			if not ((self.file_name_override and self.file_name_type_global == 'CUSTOM' and '{serial}' in self.file_name_custom_global) or (self.file_location_override and '{serial}' in self.file_location_global)):
+				col.active = False
+				col.enabled = False
+			col.prop(self, "file_serial_global")
+			
+			# File location
+			row = grid1.row()
+			row.separator()
+			row.prop(self, "file_location_override")
+			col = grid1.column(align=True)
+			if not self.file_location_override:
+				col.active = False
+				col.enabled = False
+			col.prop(self, "file_location_global", text='')
+			
+			# File name
+			row = grid1.row()
+			row.separator()
+			row.prop(self, "file_name_override")
+			col = grid1.column()
+			if not self.file_name_override:
+				col.active = False
+				col.enabled = False
+			colrow = col.row()
+			colrow.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
+			colrow = col.row()
+			if (self.file_name_type_global == 'CUSTOM'):
+				colrow.prop(self, "file_name_custom_global", text='')
+			
+			# File format
+			row = grid1.row()
+			row.separator()
+			row.prop(self, "file_format_override")
+			col = grid1.column()
+			if not self.file_format_override:
+				col.active = False
+				col.enabled = False
+			col.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
+			if self.file_format_override and self.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
+				error = col.box()
+				error.label(text="Python API can only save single layer EXR files")
+				error.label(text="Report: https://developer.blender.org/T71087")
+		
+		# Space
+		grid1.separator(factor = 4.0)
+		grid1.separator(factor = 4.0)
+		
+		# Render time preferences
+		grid1.prop(self, "remaining_render_time")
+		grid1.separator()
+		
 		grid1.prop(self, "show_total_render_time")
 		input = grid1.row()
 		if not self.show_total_render_time:
@@ -1009,144 +1093,53 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			input1.enabled = False
 		input1.prop(self, "external_log_name", text='')
 		
-		grid1.prop(self, "remaining_render_time")
+		# Space
+		grid1.separator(factor = 4.0)
+		grid1.separator(factor = 4.0)
 		
-	# Global Overrides:
-		layout.separator()
-		layout.label(text="Global Autosave Overrides:")
-		
-		grid2 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		grid2.prop(self, "enable_autosave_render_override")
-		grid2.separator()
-
-		# Disable everything if autosave override isn't engaged
-		group = layout.column()
-		if not self.enable_autosave_render_override:
-			group.active = False
-			group.enabled = False
-		
-		ops = group.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
-		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		grid2.separator()
-		if not ((self.file_name_override and self.file_name_type_global == 'CUSTOM' and '{serial}' in self.file_name_custom_global) or (self.file_location_override and '{serial}' in self.file_location_global)):
-			grid2.active = False
-			grid2.enabled = False
-		grid2.prop(self, "file_serial_global", text="")
-		
-		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		toggle = grid2.column(align=True)
-		toggle.prop(self, "file_location_override")
-		input = grid2.column(align=True)
-		if not self.file_location_override:
-			input.active = False
-			input.enabled = False
-		input.prop(self, "file_location_global", text='')
-		
-		grid2 = group.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		toggle = grid2.column()
-		toggle.prop(self, "file_name_override")
-		col = grid2.column()
-		if not self.file_name_override:
-			col.active = False
-			col.enabled = False
-		input = col.row()
-		input.prop(self, "file_name_type_global", text='', icon='FILE_TEXT')
-		input = col.row()
-		if (self.file_name_type_global == 'CUSTOM'):
-#			input.active = False
-#			input.enabled = False
-			input.prop(self, "file_name_custom_global", text='')
-		
-		grid2.prop(self, "file_format_override")
-		input = grid2.column()
-		if not self.file_format_override:
-			input.active = False
-			input.enabled = False
-		input.prop(self, "file_format_global", text='', icon='FILE_IMAGE')
-		if self.file_format_override and self.file_format_global == 'SCENE' and bpy.context.scene.render.image_settings.file_format == 'OPEN_EXR_MULTILAYER':
-			error = group.box()
-			error.label(text="Python API can only save single layer EXR files")
-			error.label(text="Report: https://developer.blender.org/T71087")
-			
-	# FFmpeg Sequencing
-		layout.separator()
-		layout.label(text="Autosave image sequences as videos:")
-		
-		# Enable
-		grid3 = layout.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		grid3.prop(self, "ffmpeg_processing")
-		
-		# Location input field
-		input = grid3.grid_flow(row_major=True, columns=-2, even_columns=True, even_rows=False, align=False)
-		if not self.ffmpeg_processing:
-			input.active = False
-			input.enabled = False
-		input.prop(self, "ffmpeg_location", text="")
-		
-		# Location exists success/fail
-		if self.ffmpeg_exists:
-			input.label(text="✔︎ installed")
-		else:
-			input.label(text="✘ missing")
-		
-	# Notifications
-		layout.separator()
-		layout.label(text="Render Complete Notifications:")
-		row = layout.row(align=False)
-		row.prop(self, "minimum_time", icon="TIME")
-		ops = row.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
+		# Notifications
+		grid1.label(text="Render Complete Notifications")
+		grid1.prop(self, "minimum_time", icon="TIME")
+		col = layout.column()
 		
 		# Email notifications
-		layout.separator()
-		layout.prop(self, "email_enable")
-		settings1 = layout.row(align=False)
-		settings2 = layout.row(align=False)
-		if not self.email_enable:
-			settings1.active = False
-			settings1.enabled = False
-			settings2.active = False
-			settings2.enabled = False
-		column1 = settings1.column(align=True)
-		column1.prop(self, "email_server", text="", icon="EXPORT")
-		column1.prop(self, "email_port")
-		
-		column2 = settings1.column(align=True)
-		column2.prop(self, "email_from", text="", icon="USER")
-		column2.prop(self, "email_password", text="", icon="LOCKED")
-		
-		column = settings2.column(align=True)
-		column.prop(self, "email_to", text="", icon="USER")
-		column.prop(self, "email_subject", text="", icon="FILE_TEXT")
-		column.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
-		
+		col.prop(self, "email_enable")
+		if self.email_enable:
+			settings1 = col.row(align=False)
+			settings2 = col.row(align=False)
+			
+			column1 = settings1.column(align=True)
+			column1.prop(self, "email_server", text="", icon="EXPORT")
+			column1.prop(self, "email_port")
+			
+			column2 = settings1.column(align=True)
+			column2.prop(self, "email_from", text="", icon="USER")
+			column2.prop(self, "email_password", text="", icon="LOCKED")
+			
+			column = settings2.column(align=True)
+			column.prop(self, "email_to", text="", icon="USER")
+			column.prop(self, "email_subject", text="", icon="FILE_TEXT")
+			column.prop(self, "email_message", text="", icon="ALIGN_JUSTIFY")
+			
 		# Pushover notifications
-		layout.separator()
-		layout.prop(self, "pushover_enable")
-		column = layout.column(align=True)
-		if not self.pushover_enable:
-			column.active = False
-			column.enabled = False
-		row = column.row(align=True)
-		row.prop(self, "pushover_key", text="", icon="USER")
-		row.prop(self, "pushover_app", text="", icon="MODIFIER_DATA")
-		column.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
-		column.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
-		
-		if self.pushover_enable and (len(self.pushover_key) != 30 or len(self.pushover_app) != 30):
-			warning = layout.box()
-			warning.label(text='Please enter valid 30-character user and app API keys', icon="ERROR")
+		col.prop(self, "pushover_enable")
+		if self.pushover_enable:
+			column = col.column(align=True)
+			row = column.row(align=True)
+			row.prop(self, "pushover_key", text="", icon="USER")
+			row.prop(self, "pushover_app", text="", icon="MODIFIER_DATA")
+			column.prop(self, "pushover_subject", text="", icon="FILE_TEXT")
+			column.prop(self, "pushover_message", text="", icon="ALIGN_JUSTIFY")
+			
+			if self.pushover_enable and (len(self.pushover_key) != 30 or len(self.pushover_app) != 30):
+				warning = col.box()
+				warning.label(text='Please enter valid 30-character user and app API keys', icon="ERROR")
 		
 		# Apple MacOS Siri text-to-speech announcement
-		layout.separator()
 		if self.macos_say_exists:
-			layout.prop(self, "macos_say_enable")
-			input = layout.row()
-			if not self.macos_say_enable:
-				input.active = False
-				input.enabled = False
-			input.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
+			col.prop(self, "macos_say_enable")
+			if self.macos_say_enable:
+				col.prop(self, "macos_say_message", text='', icon="PLAY_SOUND")
 
 
 
@@ -1154,10 +1147,6 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 # Local project settings
 
 class AutosaveRenderSettings(bpy.types.PropertyGroup):
-	enable_autosave_render: bpy.props.BoolProperty(
-		name="Enable/disable automatic saving of rendered images",
-		description="Automatically saves numbered or dated images in a directory alongside the project file or in a custom location",
-		default=True)
 	file_location: bpy.props.StringProperty(
 		name="File Location",
 		description="Leave a single forward slash to auto generate folders alongside project files",
@@ -1376,7 +1365,7 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
 	bl_context = "render"
-	bl_label = "Autosave Video"
+	bl_label = "Autosave Videos"
 	bl_parent_id = "RENDER_PT_output"
 
 	@classmethod
@@ -1473,26 +1462,20 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
 	bl_region_type = 'WINDOW'
 	bl_context = "render"
-	bl_label = "Autosave Render"
+	bl_label = "Autosave Images"
 	bl_parent_id = "RENDER_PT_output"
 	
 	@classmethod
 	def poll(cls, context):
-		return True
-	
-	def draw_header(self, context):
-		if not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
-			self.layout.prop(context.scene.autosave_render_settings, 'enable_autosave_render', text='')
+		return (
+			# Check if autosaving images is enabled
+			bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render
+		)
 	
 	def draw(self, context):
 		layout = self.layout
 		layout.use_property_decorate = False  # No animation
 		layout.use_property_split = True
-		
-		# Disable inputs if Autosave is disabled
-		if not bpy.context.scene.autosave_render_settings.enable_autosave_render and not bpy.context.preferences.addons['VF_autosaveRender'].preferences.enable_autosave_render_override:
-			layout.active = False
-			layout.enabled = False
 		
 		# Variable list popup button
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
@@ -1610,7 +1593,7 @@ class AutosaveRenderVariableCopy(bpy.types.Operator):
 
 # Render output UI
 def RENDER_PT_output_path_variable_list(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_path:
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables:
 		# UI layout for Scene Output
 		layout = self.layout
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
@@ -1625,7 +1608,7 @@ def RENDER_PT_output_path_variable_list(self, context):
 
 # Node output UI
 def NODE_PT_output_path_variable_list(self, context):
-	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.filter_output_file_nodes:
+	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.render_output_variables:
 		active_node = bpy.context.scene.node_tree.nodes.active
 		if isinstance(active_node, bpy.types.CompositorNodeOutputFile):
 			# Get file path and all output file names from the current active node
