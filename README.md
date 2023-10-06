@@ -1,6 +1,6 @@
 # VF Autosave Render + Output Variables
 
-Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables. This Blender add-on helps automate file naming (enabling more advanced production workflows) and makes test renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
+Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables for final renders. This Blender add-on helps automate file naming (enabling more advanced production workflows) and makes look development renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
 
 ![screenshot of the variable popup window in the Blender compositing tab](images/banner.jpg)
 
@@ -14,6 +14,8 @@ Automatically saves a numbered or dated image after every render and extends the
 - It will be enabled by default in the Render Output panel, where you can customise the automatic file output settings
 
 _**Warning:**_ version 2 of this add-on changes the capitalisation of the file, and will fail to install or run correctly if prior versions are not fully cleared from the system before upgrading. Restarting Blender may be necessary between uninstalling an older version and installing this update.
+
+_**Warning:**_ Blender does not trigger pre-render and post-render events when using `Viewport Render Image`, `Viewport Render Keyframes`, and `Viewport Render Animation`, which means this plugin is never informed that a render is happening. Unfortunately Blender uses the same output directory for both saving viewport images and actual rendering; output files will still be saved from the viewport, but the unresolved variable names will be used instead of the expected dynamic content. [Please see this issue report for more details and potential workarounds for play blast style rendering.](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/issues/7)
 
 ![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.png)
 
