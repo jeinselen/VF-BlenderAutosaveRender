@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 2),
+	"version": (2, 7, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -68,7 +68,10 @@ variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collectio
 				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
 
 ###########################################################################
-# Start time function
+# Pre-render function
+# Set render status variables
+# Save start time for calculations
+# Replace dynamic output variables
 
 @persistent
 def autosave_render_start(scene):
@@ -128,10 +131,11 @@ def autosave_render_start(scene):
 					
 		# Convert the dictionary to JSON format and save to the plugin preferences for safekeeping while rendering
 		bpy.context.scene.autosave_render_settings.output_file_nodes = json.dumps(node_settings)
-		
+
 ###########################################################################
-# Render time remaining estimation function
-		
+# During render function
+# Remaining render time estimation
+
 @persistent
 def autosave_render_estimate(scene):
 	# Save starting frame (before setting active to true, this should only happen once during a sequence)
@@ -158,10 +162,16 @@ def autosave_render_estimate(scene):
 		bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
 
 ###########################################################################
-# Autosave render function
+# Post-render function
+# Compile output video using FFmpeg
+# Autosave final rendered image
+# Reset render status variables
+# Reset output paths with original keywords
+# Send render compelte alerts
+# Save log file
 
 @persistent
-def autosave_render(scene):
+def autosave_render_end(scene):
 	# Set estimated render time active to false (render is complete or canceled, estimate display and FFmpeg check is no longer needed)
 	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
 	
@@ -2233,9 +2243,9 @@ def register():
 	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
 	bpy.app.handlers.render_post.append(autosave_render_estimate)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
-	# bpy.app.handlers.render_post.append(autosave_render)
-	bpy.app.handlers.render_cancel.append(autosave_render)
-	bpy.app.handlers.render_complete.append(autosave_render)
+	# bpy.app.handlers.render_post.append(autosave_render_end)
+	bpy.app.handlers.render_cancel.append(autosave_render_end)
+	bpy.app.handlers.render_complete.append(autosave_render_end)
 	# Render estimate display
 	bpy.types.IMAGE_MT_editor_menus.append(image_viewer_feedback_display)
 	# Variable info popup
@@ -2256,9 +2266,9 @@ def unregister():
 	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
 	bpy.app.handlers.render_post.remove(autosave_render_estimate)
 	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
-	# bpy.app.handlers.render_post.remove(autosave_render)
-	bpy.app.handlers.render_cancel.remove(autosave_render)
-	bpy.app.handlers.render_complete.remove(autosave_render)
+	# bpy.app.handlers.render_post.remove(autosave_render_end)
+	bpy.app.handlers.render_cancel.remove(autosave_render_end)
+	bpy.app.handlers.render_complete.remove(autosave_render_end)
 	# Render estimate display
 	bpy.types.IMAGE_MT_editor_menus.remove(image_viewer_feedback_display)
 	# Variable info popup
