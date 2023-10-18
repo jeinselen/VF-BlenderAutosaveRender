@@ -61,7 +61,8 @@ The available variables are sorted into four groups: Project (values derived fro
 
 1. **Project variables**
 	- `{project}` = the name of the Blender file
-	- `{scene}` = current scene being rendered (if multiple scenes are used in the compositing tab, only the currently selected scene name will be used)
+	- `{scene}` = current scene being rendered (the current active scene will be used regardless of compositor setup or other settings)
+	- `{viewlayer}` = current view layer being rendered (the current active view layer will be used regardless of compositor setup or other settings)
 	- `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
 	- `{camera}` = render camera (independent of selection or active status)
 	- `{item}` = active item (if no item is selected or active, this will return "None")

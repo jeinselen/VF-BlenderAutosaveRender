@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 3),
+	"version": (2, 7, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -62,7 +62,7 @@ FFMPEG_FORMATS = (
 	'OPEN_EXR',
 	'TIFF')
 
-variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
+variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{viewlayer}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
 				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}", "{rtime}", "{rH},{rM},{rS}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
 				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
@@ -667,6 +667,7 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	# Project variables
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", bpy.context.scene.name)
+	string = string.replace("{viewlayer}", bpy.context.view_layer.name)
 	string = string.replace("{collection}", bpy.context.scene.autosave_render_settings.batch_collection_name if len(bpy.context.scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name)
 #	string = string.replace("{collection}", bpy.context.view_layer.active_layer_collection.name)
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
@@ -943,7 +944,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	email_message: bpy.props.StringProperty(
 		name="Email Body",
 		description="Text string sent as the email body copy",
-		default="{project} — {scene} rendering completed in {rH}:{rM}:{rS} on {host}",
+		default="{project} rendering completed in {rH}:{rM}:{rS} on {host}",
 		maxlen=4096)
 	
 	# Pushover app notifications
@@ -969,7 +970,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 	pushover_message: bpy.props.StringProperty(
 		name="Pushover Message",
 		description="Notification message that will be sent to Pushover devices",
-		default="{project} — {scene} rendering completed in {rH}:{rM}:{rS} on {host}",
+		default="{project} rendering completed in {rH}:{rM}:{rS} on {host}",
 		maxlen=4096)
 	
 	# MacOS Siri text-to-speech announcement
@@ -1115,6 +1116,13 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			subgrid = margin.column()
 			margin.separator(factor=2.0)
 			
+			# Security Warning
+			box = subgrid.box()
+			warning = box.column(align=True)
+			warning.label(text="WARNING:")
+			warning.label(text="Blender does not encrypt settings and stores credentials as plain text,")
+			warning.label(text="account details entered here are not secure")
+			
 			# Account
 			settings1 = subgrid.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
 			column1 = settings1.column(align=True)
@@ -1145,6 +1153,13 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			margin.separator(factor=2.0)
 			subgrid = margin.column()
 			margin.separator(factor=2.0)
+			
+			# Security Warning
+			box = subgrid.box()
+			warning = box.column(align=True)
+			warning.label(text="WARNING:")
+			warning.label(text="Blender does not encrypt settings and stores credentials as plain text,")
+			warning.label(text="API keys entered here are not secure")
 			
 			# Account
 			settings1 = subgrid.column(align=True)
