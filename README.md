@@ -93,7 +93,10 @@ The available variables are sorted into four groups: Project (values derived fro
 	- `{rM}` = just the minutes component from `{rtime}`
 	- `{rS}` = just the seconds component from `{rtime}`
 		- **Limitation:** render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
-		- Features that are exclusively post-render and support render time variables include; autosaved videos, autosaved images, and the notification system
+		- Post-render plugin features that support render time variables include:
+			- Autosave Video
+			- Autosave Image
+			- Notifications
 		- These variables are also calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API
 3. **System variables**
 	- `{host}` = name of the computer or host being used for rendering
