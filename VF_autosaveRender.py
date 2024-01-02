@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 4),
+	"version": (2, 7, 5),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -668,29 +668,30 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", bpy.context.scene.name)
 	string = string.replace("{viewlayer}", bpy.context.view_layer.name)
-	string = string.replace("{collection}", bpy.context.scene.autosave_render_settings.batch_collection_name if len(bpy.context.scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name)
-#	string = string.replace("{collection}", bpy.context.view_layer.active_layer_collection.name)
+	string = string.replace("{collection}", bpy.context.scene.autosave_render_settings.batch_collection_name if len(bpy.context.scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name) # Alt: bpy.context.view_layer.active_layer_collection.name
 	string = string.replace("{camera}", bpy.context.scene.camera.name)
 	string = string.replace("{item}", projectItem)
 	string = string.replace("{material}", projectMaterial)
 	string = string.replace("{node}", projectNode)
+	
 	# Rendering variables
 	string = string.replace("{renderengine}", renderEngine)
 	string = string.replace("{device}", renderDevice)
 	string = string.replace("{samples}", renderSamples)
 	string = string.replace("{features}", renderFeatures)
-	# {rendertime} special case: only enabled if a value is supplied
-	if rendertime >= 0.0:
+	if rendertime >= 0.0: # Only enabled if a value is supplied
 		string = string.replace("{rendertime}", str(rendertime) + 's')
 		rH, rM, rS = secondsToStrings(rendertime)
 		string = string.replace("{rtime}", rH + '-' + rM + '-' + rS)
 		string = string.replace("{rH}", rH)
 		string = string.replace("{rM}", rM)
 		string = string.replace("{rS}", rS)
+	
 	# System variables
 	string = string.replace("{host}", platform.node().split('.')[0])
 	string = string.replace("{platform}", platform.platform())
 	string = string.replace("{version}", bpy.app.version_string + '-' + bpy.app.version_cycle)
+	
 	# Identifier variables
 	string = string.replace("{date}", datetime.datetime.now().strftime('%Y-%m-%d'))
 	string = string.replace("{year}", "{y}") # Alternative variable
@@ -706,14 +707,12 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	string = string.replace("{M}", datetime.datetime.now().strftime('%M'))
 	string = string.replace("{second}", "{S}") # Alternative variable
 	string = string.replace("{S}", datetime.datetime.now().strftime('%S'))
-	# {serial} special case: only enabled if a value is supplied
-	if serial >= 0:
+	if serial >= 0: # Only enabled if a value is supplied
 		string = string.replace("{serial}", format(serial, '04'))
 	string = string.replace("{frame}", format(bpy.context.scene.frame_current, '04'))
 	# Batch variables
-#	string = string.replace("{batch}", "{index}") # Alternative variable
-#	string = string.replace("{index}", str(bpy.context.scene.autosave_render_settings.batch_index))
-	string = string.replace("{index}", format(bpy.context.scene.autosave_render_settings.batch_index, '04'))
+	string = string.replace("{index}", "{batch}") # Alternative variable (backwards compatibility may be removed at a later date)
+	string = string.replace("{batch}", format(bpy.context.scene.autosave_render_settings.batch_index, '04'))
 	return string
 
 ###########################################################################
@@ -1363,7 +1362,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 			(None),
 			('imgs', 'Images', 'Batch render using images from specified folder'),
 			],
-		default='imgs')
+		default='itms')
 	batch_range: bpy.props.EnumProperty(
 		name='Range',
 		description='Batch render single frame or full timeline sequence',
@@ -1371,7 +1370,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 			('img', 'Image', 'Batch render a single frame for each element'),
 			('anim', 'Animation', 'Batch render the timeline range for each element')
 			],
-		default='anim')
+		default='img')
 	
 	# Batch cameras
 	# Uses the active camera for output variables
@@ -1620,8 +1619,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 				col = grid.column()
 				col.label(text = x[1], icon = x[2])
 			# Display list elements
-			elif item != "{rendertime}" or self.rendertime:
-#				col.label(text = item)
+			elif item != ("{rendertime}" or "{rtime}" or "{rH},{rM},{rS}") or self.rendertime:
 				if ',' in item:
 					subrow = col.row(align = True)
 					for subitem in item.split(','):
@@ -1641,8 +1639,15 @@ class AutosaveRenderVariableCopy(bpy.types.Operator):
 	
 	string: bpy.props.StringProperty()
 	
-	def execute(self, context):
+	def invoke(self, context, event):
 		context.window_manager.clipboard = self.string
+		
+		# Close the popup panel by temporarily moving the mouse
+		x, y = event.mouse_x, event.mouse_y
+		context.window.cursor_warp(10, 10)
+		move_back = lambda: context.window.cursor_warp(x, y)
+		bpy.app.timers.register(move_back, first_interval=0.001)
+		
 		return {'FINISHED'}
 
 # Render output UI
@@ -2038,7 +2043,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 	bl_space_type = 'VIEW_3D'
 	bl_region_type = 'UI'
 	bl_category = 'VF Tools'
-	bl_order = 16
+	bl_order = 24
 	bl_options = {'DEFAULT_CLOSED'}
 	
 	@classmethod
