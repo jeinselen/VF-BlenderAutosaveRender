@@ -1629,7 +1629,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 				col = grid.column()
 				col.label(text = x[1], icon = x[2])
 			# Display list elements
-			elif item != ("{rendertime}" or "{rtime}" or "{rH},{rM},{rS}") or self.rendertime:
+			elif item not in ["{rendertime}", "{rtime}", "{rH},{rM},{rS}"] or self.rendertime:
 				if ',' in item:
 					subrow = col.row(align = True)
 					for subitem in item.split(','):
