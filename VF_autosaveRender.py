@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 7, 5),
+	"version": (2, 7, 10),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -63,9 +63,10 @@ FFMPEG_FORMATS = (
 	'TIFF')
 
 variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{viewlayer}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
-				"title,Rendering,CAMERA_DATA", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}", "{rtime}", "{rH},{rM},{rS}",
+				"title,Image,NODE_COMPOSITING", "{display}", "{viewtransform}", "{look}", "{exposure}", "{gamma}", "{curves}", "{compositing}",
+				"title,Render,SCENE", "{renderengine}", "{device}", "{samples}", "{features}", "{rendertime}", "{rtime}", "{rH},{rM},{rS}",
 				"title,System,DESKTOP", "{host}", "{platform}", "{version}",
-				"title,Identifiers,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}"]
+				"title,Identifier,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}", "{batch}"]
 
 ###########################################################################
 # Pre-render function
@@ -673,6 +674,15 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	string = string.replace("{item}", projectItem)
 	string = string.replace("{material}", projectMaterial)
 	string = string.replace("{node}", projectNode)
+	
+	# Image variables
+	string = string.replace("{display}", bpy.context.scene.display_settings.display_device)
+	string = string.replace("{viewtransform}", bpy.context.scene.view_settings.view_transform)
+	string = string.replace("{look}", bpy.context.scene.view_settings.look)
+	string = string.replace("{exposure}", str(bpy.context.scene.view_settings.exposure))
+	string = string.replace("{gamma}", str(bpy.context.scene.view_settings.gamma))
+	string = string.replace("{curves}", str(bpy.context.scene.view_settings.use_curve_mapping))
+	string = string.replace("{compositing}", str(bpy.context.scene.use_nodes))
 	
 	# Rendering variables
 	string = string.replace("{renderengine}", renderEngine)
@@ -1607,11 +1617,11 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 		return {'FINISHED'}
 
 	def invoke(self, context, event):
-		return context.window_manager.invoke_popup(self, width=420)
+		return context.window_manager.invoke_popup(self, width=500)
 
 	def draw(self, context):
 		layout = self.layout
-		grid = self.layout.grid_flow(columns = 4, even_columns = True, even_rows = True)
+		grid = self.layout.grid_flow(row_major=True, columns = 5, even_columns = True, even_rows = True)
 		for item in variableArray:
 			# Display headers
 			if item.startswith('title,'):
