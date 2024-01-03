@@ -58,67 +58,87 @@ Dynamic variables can be used in Blender's Output Path, in the Base Path and Fil
 The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values unique to the time or iteration of the render).
 
 1. **Project variables**
-	- `{project}` = the name of the Blender file
-	- `{scene}` = current scene being rendered (the current active scene will be used regardless of compositor setup or other settings)
-	- `{viewlayer}` = current view layer being rendered (the current active view layer will be used regardless of compositor setup or other settings)
-	- `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
-	- `{camera}` = render camera (independent of selection or active status)
-	- `{item}` = active item (if no item is selected or active, this will return "None")
-	- `{material}` = active material of active object (if not found, this will return "None")
-	- `{node}` = the active node in the active material of the active object (if not found, this will return "None")
-		- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is well managed
-2. **Rendering variables**
-	- `{renderengine}` = name of the current rendering engine (uses the internal Blender identifier)
-	- `{device}` = CPU or GPU device
-		- Workbench and Eevee always use the GPU
-		- Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
-		- Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
-		- LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
-	- `{samples}` = number of samples
-		- Workbench will return the type of antialiasing enabled
-		- Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
-		- Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
-		- Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
-		- LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
-		- All outputs reflect the order displayed in the Blender interface
-	- `{features}` = enabled features or ray recursions
-		- Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
-		- Eevee will list abbreviations for ambient occlusion, bloom, screen space reflections, and motion blur if enabled
-		- Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
-		- Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
-		- LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
-	- `{rendertime}` = time spent rendering in seconds
-	- `{rtime}` = time spent rendering in HH-MM-SS format (hours will continue counting indefinitely, they will not roll over into days)
-	- `{rH}` = just the hours component from `{rtime}`
-	- `{rM}` = just the minutes component from `{rtime}`
-	- `{rS}` = just the seconds component from `{rtime}`
-		- **Limitation:** render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
-		- Post-render plugin features that support render time variables include:
-			- Autosave Video
-			- Autosave Image
-			- Notifications
-		- These variables are also calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API
-3. **System variables**
-	- `{host}` = name of the computer or host being used for rendering
-	- `{platform}` = operating system of the computer being used for rendering (example: "macOS-12.6-x86_64-i386-64bit")
-	- `{version}` = Blender version and status (examples: "3.3.1-release" or "3.4.0-alpha")
-4. **Identifier variables**
-	- `{date}` = current date in YYYY-MM-DD format
-		- This is a combined shortcut for the individual date variables below
-	- `{y}` or `{year}` = current year in YYYY format
-	- `{m}` or `{month}` = current month in MM format
-	- `{d}` or `{day}` = current day in DD format
-	- `{time}` = current time in HH-MM-SS 24-hour format
-		- This is a combined shortcut for the individual time variables below
-		- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
-	- `{H}` or `{hour}` = current hour in HH 24-hour format
-	- `{M}` or `{minute}` = current minute in MM format
-	- `{S}` or `{second}` = current second in SS format
-	- `{serial}` = automatically incremented serial number padded to 4 digits
-		- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving versus the other file output methods is separate so that test renders can use their own serial number tracking
-		- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
-		- Files may be overwritten if this counter is manually reset; both a feature and a danger
-	- `{frame}` = current frame number (padded to four digits)
+  - `{project}` = the name of the Blender file
+  - `{scene}` = current scene being rendered (the current active scene will be used regardless of compositor setup or other settings)
+  - `{viewlayer}` = current view layer being rendered (the current active view layer will be used regardless of compositor setup or other settings)
+  - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
+  - `{camera}` = render camera (independent of selection or active status)
+  - `{item}` = active item (if no item is selected or active, this will return "None")
+  - `{material}` = active material of active object (if not found, this will return "None")
+  - `{node}` = the active node in the active material of the active object (if not found, this will return "None")
+  	- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is known to be reliable
+2. **Image variables**
+  - `{display}` = display device format
+  - `{space}` = the output colour space
+  	- This is typically called "View Transform" in Blender, and the `{viewtransform}` variable also works
+  - `{look}` = the additional contrast transform applied
+  - `{exposure}` = current exposure value
+  - `{gamma}` = current gamma value
+  - `{curves}` = returns the status of the color management curves, either "Curves" or "None"
+  	- All of the above color management controls set in the `Render` panel can be overridden in the `Output` panel: the variables should correctly reflect either approach, but will not reflect per-input overrides in `Compositing` tab `File Output` nodes
+  - `{compositing}` = returns the status of the compositing node tree, either "Compositing" or "None"
+3. **Rendering variables**
+  - `{engine}` = name of the current rendering engine (uses the internal Blender identifier)
+  	- Replaces `{renderengine}` for better readability, but the old variable still works as expected
+  - `{device}` = CPU or GPU device
+    - Workbench and Eevee always use the GPU
+    - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
+    - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
+    - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
+  - `{samples}` = number of samples
+    - Workbench will return the type of antialiasing enabled
+    - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
+    - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
+    - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
+    - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
+    - All outputs reflect the order displayed in the Blender interface
+  - `{features}` = enabled features or ray recursions
+    - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+    - Eevee will list abbreviations for any active effects (ambient occlusion, bloom, screen space reflections, and motion blur with the number of steps) or "None" if all of them are disabled
+    - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+    - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
+    - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
+  - `{duration}` = time spent rendering in seconds
+  	- Replaces `{rendertime}` for better clarity and readability, but the old variable still works as expected
+  - `{rtime}` = time spent rendering in HH-MM-SS format (hours will not roll over into days)
+  - `{rH}` = just the hours component from `{rtime}`
+  - `{rM}` = just the minutes component from `{rtime}`
+  - `{rS}` = just the seconds component from `{rtime}`
+    - **Limitation:** render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
+    - Post-render plugin features that support render time variables include:
+    	- Autosave Video
+    	- Autosave Image
+    	- Notifications
+    - These variables are also calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API
+4. **System variables**
+  - `{host}` = name of the computer or host being used for rendering
+  - `{processor}` = processor type (example: "x86_64")
+  - `{platform}` = operating system of the computer being used for rendering (example: "macOS-14.2.1-x86_64-i386-64bit")
+  - `{system}` = operating system type (examples: "Linux" "macOS" or "Windows")
+  - `{release}` = operating system version number (Linux version number includes release status)
+  - `{python}` = Python version number
+  - `{blender}` = Blender version number and type (examples: "3.3.1-release" or "3.4.0-alpha")
+  	- Replaces `{version}` for improved clarity, but the old variable still works as expected
+5. **Identifier variables**
+  - `{date}` = current date in YYYY-MM-DD format
+  	- This is a combined shortcut for the individual date variables below
+  - `{y}` or `{year}` = current year in YYYY format
+  - `{m}` or `{month}` = current month in MM format
+  - `{d}` or `{day}` = current day in DD format
+  - `{time}` = current time in HH-MM-SS 24-hour format
+  	- This is a combined shortcut for the individual time variables below
+  	- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
+  - `{H}` or `{hour}` = current hour in HH 24-hour format
+  - `{M}` or `{minute}` = current minute in MM format
+  - `{S}` or `{second}` = current second in SS format
+  - `{serial}` = automatically incremented serial number padded to 4 digits
+  	- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving is separate so that test renders can use their own serial number tracking
+  	- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
+  	- The serial number will still increment even if the render output is not triggered during the rendering of a single image
+  	- Files may be overwritten if this counter is manually reset; both a feature and a danger
+  - `{frame}` = current frame number (padded to four digits)
+  - `{batch}` = current index during batch rendering, or when not batch rendering, the index that can be manually set in the 3D View > VF Tools > Batch Render panel
+  	- The version of this addon from 2023 used `{index}`, which remains as an alias to the updated variable (older projects will still render as expected)
 
 _**Warning:**_ using a custom string may result in overwriting or failing to save files if the generated name is not unique. For example, if date and time or serial number variables are not included.
 
@@ -175,7 +195,7 @@ If you run into any issues, especially when using the custom option, try running
 
 ![screenshot of the Blender Output tab with sample variables](images/screenshot4-output.png)
 
-If enabled in the add-on preferences, this extends the native Blender output path with all but one of the `Custom String` variables listed above. The `{rendertime}` variable is not available because it does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
+If enabled in the add-on preferences, this extends the native Blender output path with all but the total render time options listed above. The `{duration}` `{rtime}` `{rH}` `{rM}` `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
 
 This works well for automatic naming of animations because the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
@@ -185,7 +205,7 @@ This works well for automatic naming of animations because the variables are pro
 
 ![screenshot of the compositing tab file output node with sample variables and the variable popup window](images/screenshot5-node.png)
 
-If enabled in the add-on preferences, this extends `File Output` nodes in the Compositing tab with all but one of the `Custom String` variables listed above. The `{rendertime}` variable is not available because it does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
+If enabled in the add-on preferences, this extends `File Output` nodes in the Compositing tab with all but the total render time options listed above. The `{duration}` `{rtime}` `{rH}` `{rM}` `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
 
 This feature supports customisation of both the `Base Path` and each image input `File Subpath` in the node. Like the render output variables feature, this fully supports animations, including the date and time variables which are set at render start (not per-frame).
 
