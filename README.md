@@ -58,28 +58,28 @@ Dynamic variables can be used in Blender's Output Path, in the Base Path and Fil
 The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values unique to the time or iteration of the render).
 
 1. **Project variables**
-  - `{project}` = the name of the Blender file
-  - `{scene}` = current scene being rendered (the current active scene will be used regardless of compositor setup or other settings)
-  - `{viewlayer}` = current view layer being rendered (the current active view layer will be used regardless of compositor setup or other settings)
-  - `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
-  - `{camera}` = render camera (independent of selection or active status)
-  - `{item}` = active item (if no item is selected or active, this will return "None")
-  - `{material}` = active material of active object (if not found, this will return "None")
-  - `{node}` = the active node in the active material of the active object (if not found, this will return "None")
-  	- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is known to be reliable
+- `{project}` = the name of the Blender file
+- `{scene}` = current scene being rendered (the current active scene will be used regardless of compositor setup or other settings)
+- `{viewlayer}` = current view layer being rendered (the current active view layer will be used regardless of compositor setup or other settings)
+- `{collection}` = active collection (if no collection is selected or active, this will return the root "Scene Collection")
+- `{camera}` = render camera (independent of selection or active status)
+- `{item}` = active item (if no item is selected or active, this will return "None")
+- `{material}` = active material of active object (if not found, this will return "None")
+- `{node}` = the active node in the active material of the active object (if not found, this will return "None")
+	- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is known to be reliable
 2. **Image variables**
   - `{display}` = display device format
-  - `{space}` = the output colour space
-  	- This is typically called "View Transform" in Blender, and the `{viewtransform}` variable also works
+  - `{colorspace}` = the output colour space, also known as the interchange format
+	- This is called "View Transform" in Blender; `{viewtransform}` can be used interchangeably
   - `{look}` = the additional contrast transform applied
   - `{exposure}` = current exposure value
   - `{gamma}` = current gamma value
   - `{curves}` = returns the status of the color management curves, either "Curves" or "None"
-  	- All of the above color management controls set in the `Render` panel can be overridden in the `Output` panel: the variables should correctly reflect either approach, but will not reflect per-input overrides in `Compositing` tab `File Output` nodes
+	- All of the above color management controls set in the `Render` panel can be overridden in the `Output` panel: the variables should correctly reflect either approach, but will not reflect per-input overrides in `Compositing` tab `File Output` nodes
   - `{compositing}` = returns the status of the compositing node tree, either "Compositing" or "None"
 3. **Rendering variables**
   - `{engine}` = name of the current rendering engine (uses the internal Blender identifier)
-  	- Replaces `{renderengine}` for better readability, but the old variable still works as expected
+	- Replaces `{renderengine}` for better readability, but the old variable still works as expected
   - `{device}` = CPU or GPU device
     - Workbench and Eevee always use the GPU
     - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
@@ -99,8 +99,9 @@ The available variables are sorted into four groups: Project (values derived fro
     - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
     - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
   - `{duration}` = time spent rendering in seconds
-  	- Replaces `{rendertime}` for better clarity and readability, but the old variable still works as expected
+	- Replaces `{rendertime}` for better clarity and readability, but the old variable still works as expected
   - `{rtime}` = time spent rendering in HH-MM-SS format (hours will not roll over into days)
+	- This is a combined shortcut for the individual date variables below
   - `{rH}` = just the hours component from `{rtime}`
   - `{rM}` = just the minutes component from `{rtime}`
   - `{rS}` = just the seconds component from `{rtime}`
@@ -118,27 +119,31 @@ The available variables are sorted into four groups: Project (values derived fro
   - `{release}` = operating system version number (Linux version number includes release status)
   - `{python}` = Python version number
   - `{blender}` = Blender version number and type (examples: "3.3.1-release" or "3.4.0-alpha")
-  	- Replaces `{version}` for improved clarity, but the old variable still works as expected
+	- Replaces `{version}` for improved clarity, but the old variable still works as expected
 5. **Identifier variables**
   - `{date}` = current date in YYYY-MM-DD format
-  	- This is a combined shortcut for the individual date variables below
+	- This is a combined shortcut for the individual date variables below
+
   - `{y}` or `{year}` = current year in YYYY format
   - `{m}` or `{month}` = current month in MM format
   - `{d}` or `{day}` = current day in DD format
   - `{time}` = current time in HH-MM-SS 24-hour format
-  	- This is a combined shortcut for the individual time variables below
-  	- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables
+	- This is a combined shortcut for the individual time variables below
+	- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables (otherwise month and minute would conflict with each other)
+
   - `{H}` or `{hour}` = current hour in HH 24-hour format
   - `{M}` or `{minute}` = current minute in MM format
   - `{S}` or `{second}` = current second in SS format
   - `{serial}` = automatically incremented serial number padded to 4 digits
-  	- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving is separate so that test renders can use their own serial number tracking
-  	- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
-  	- The serial number will still increment even if the render output is not triggered during the rendering of a single image
-  	- Files may be overwritten if this counter is manually reset; both a feature and a danger
+	- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving is separate so that test renders can use their own serial number tracking
+	- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
+	- The serial number will still increment even if the render output is not triggered during the rendering of a single image
+	- Files may be overwritten if this counter is manually reset; both a feature and a danger
+
   - `{frame}` = current frame number (padded to four digits)
   - `{batch}` = current index during batch rendering, or when not batch rendering, the index that can be manually set in the 3D View > VF Tools > Batch Render panel
-  	- The version of this addon from 2023 used `{index}`, which remains as an alias to the updated variable (older projects will still render as expected)
+	- The version of this addon from 2023 used `{index}`, which remains as an alias to the updated variable (older projects will still render as expected)
+
 
 _**Warning:**_ using a custom string may result in overwriting or failing to save files if the generated name is not unique. For example, if date and time or serial number variables are not included.
 
