@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 0),
+	"version": (2, 8, 1),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -679,15 +679,15 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	
 	# Image variables
 	sceneOverride = scene.render.image_settings if bpy.context.scene.render.image_settings.color_management == "OVERRIDE" else scene
-	string = string.replace("{display}", sceneOverride.display_settings.display_device)
+	string = string.replace("{display}", sceneOverride.display_settings.display_device.replace(" ", "").replace(".", ""))
 	string = string.replace("{viewtransform}", "{colorspace}") # Alternative variable (backwards compatibility may be removed at a later date)
 	string = string.replace("{colorspace}", "{space}") # Alternative variable (backwards compatibility may be removed at a later date)
-	string = string.replace("{space}", sceneOverride.view_settings.view_transform)
-	string = string.replace("{look}", sceneOverride.view_settings.look.replace(" ", ""))
+	string = string.replace("{space}", sceneOverride.view_settings.view_transform.replace(" ", ""))
+	string = string.replace("{look}", sceneOverride.view_settings.look.replace(" ", "").replace("AgX-", "").replace("FalseColor-", ""))
 	string = string.replace("{exposure}", str(sceneOverride.view_settings.exposure))
 	string = string.replace("{gamma}", str(sceneOverride.view_settings.gamma))
-	string = string.replace("{curves}", str("Curves" if sceneOverride.view_settings.use_curve_mapping else "None"))
-	string = string.replace("{compositing}", str("Compositing" if scene.use_nodes else "None"))
+	string = string.replace("{curves}", "Curves" if sceneOverride.view_settings.use_curve_mapping else "None")
+	string = string.replace("{compositing}", "Compositing" if scene.use_nodes else "None")
 	
 	# Rendering variables
 	string = string.replace("{renderengine}", "{engine}") # Alternative variable (backwards compatibility may be removed at a later date)

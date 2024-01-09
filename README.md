@@ -110,7 +110,7 @@ The available variables are sorted into four groups: Project (values derived fro
     	- Autosave Video
     	- Autosave Image
     	- Notifications
-    - These variables are also calculated within the script and may not _exactly_ match the render metadata, which is unavailable in the Python API
+    - Rendering duration is calculated within the script at render start and end, and may not _exactly_ match the render metadata (which is unavailable in the Python API)
 4. **System variables**
   - `{host}` = name of the computer or host being used for rendering
   - `{processor}` = processor type (example: "x86_64")
