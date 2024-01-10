@@ -1,24 +1,26 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 1),
+	"version": (2, 8, 2),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
-	"warning": "inexperienced developer, use at your own risk",
 	"doc_url": "https://github.com/jeinselenVF/VF-BlenderAutosaveRender",
 	"tracker_url": "https://github.com/jeinselenVF/VF-BlenderAutosaveRender/issues",
 	"category": "Render"}
 
+# General features
 import bpy
 from bpy.app.handlers import persistent
 import datetime
+import time
 import json
+# File paths
 import os
 from pathlib import Path
+# Variable data
 import platform
 from re import findall, search, sub, M as multiline
-import time
 # FFmpeg system access
 import subprocess
 from shutil import which
@@ -28,6 +30,7 @@ from email.mime.text import MIMEText
 # Pushover notifications
 import requests
 
+# Format validation lists
 IMAGE_FORMATS = (
 	'BMP',
 	'IRIS',
@@ -62,29 +65,36 @@ FFMPEG_FORMATS = (
 	'OPEN_EXR',
 	'TIFF')
 
-variableArray = ["title,Project,SCENE_DATA", "{project}", "{scene}", "{viewlayer}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
-				"title,Image,NODE_COMPOSITING", "{display}", "{space}", "{look}", "{exposure}", "{gamma}", "{curves}", "{compositing}",
-				"title,Render,SCENE", "{engine}", "{device}", "{samples}", "{features}", "{duration}", "{rtime}", "{rH},{rM},{rS}",
-				"title,System,DESKTOP", "{host}", "{processor}", "{platform}", "{system}", "{release}", "{python}", "{blender}",
-				"title,Identifier,COPY_ID", "{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}", "{batch}"]
+# Available variables
+# Includes both headers (string starting with "title,") and variables (string with brackets, commas segment multi-variable lines)
+variableArray = ["title,Project,SCENE_DATA",
+					"{project}", "{scene}", "{viewlayer}", "{collection}", "{camera}", "{item}", "{material}", "{node}",
+				"title,Image,NODE_COMPOSITING",
+					"{display}", "{colorspace}", "{look}", "{exposure}", "{gamma}", "{curves}", "{compositing}",
+				"title,Render,SCENE",
+					"{engine}", "{device}", "{samples}", "{features}", "{duration}", "{rtime}", "{rH},{rM},{rS}",
+				"title,System,DESKTOP",
+					"{host}", "{processor}", "{platform}", "{system}", "{release}", "{python}", "{blender}",
+				"title,Identifier,COPY_ID",
+					"{date}", "{y},{m},{d}", "{time}", "{H},{M},{S}", "{serial}", "{frame}", "{batch}"]
+
+
 
 ###########################################################################
 # Pre-render function
-# Set render status variables
-# Save start time for calculations
-# Replace dynamic output variables
+# •Set render status variables
+# •Save start time for calculations
+# •Replace output variables
 
 @persistent
 def autosave_render_start(scene):
-	# Set video sequence tracking (separate from render active below)
-	bpy.context.scene.autosave_render_settings.autosave_video_sequence = False
-	bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = False
-	
-	# Set estimated render time active to false (must render at least one frame before estimating time remaining)
-	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
-	
 	# Save start time in seconds as a string to the addon settings
 	bpy.context.scene.autosave_render_settings.start_date = str(time.time())
+	# Set estimated render time active to false (must render at least one frame before estimating time remaining)
+	bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
+	# Set video sequence tracking (separate from render active above)
+	bpy.context.scene.autosave_render_settings.autosave_video_sequence = False
+	bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = False
 	
 	# Track usage of the output serial usage globally to ensure it can be accessed before/after rendering
 	# Set it to false ahead of processing to ensure no errors occur (usually only if there's a crash of some sort)
@@ -133,9 +143,11 @@ def autosave_render_start(scene):
 		# Convert the dictionary to JSON format and save to the plugin preferences for safekeeping while rendering
 		bpy.context.scene.autosave_render_settings.output_file_nodes = json.dumps(node_settings)
 
+
+
 ###########################################################################
 # During render function
-# Remaining render time estimation
+# •Remaining render time estimation
 
 @persistent
 def autosave_render_estimate(scene):
@@ -162,14 +174,16 @@ def autosave_render_estimate(scene):
 	else:
 		bpy.context.scene.autosave_render_settings.estimated_render_time_active = False
 
+
+
 ###########################################################################
 # Post-render function
-# Compile output video using FFmpeg
-# Autosave final rendered image
-# Reset render status variables
-# Reset output paths with original keywords
-# Send render compelte alerts
-# Save log file
+# •Compile output video using FFmpeg
+# •Autosave final rendered image
+# •Reset render status variables
+# •Reset output paths with original keywords
+# •Send render complete alerts
+# •Save log file
 
 @persistent
 def autosave_render_end(scene):
@@ -231,15 +245,15 @@ def autosave_render_end(scene):
 			ffmpeg_command += ' -vendor apl0 -an -sn'
 			# Output file path
 			ffmpeg_command += ' ' + output_path + '.mov'
-			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('ProRes command: ' + ffmpeg_command)
+			print('FFmpeg ProRes command: ' + ffmpeg_command)
+			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
 			except Exception as exc:
-				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg ProRes command")
 		
 		# MP4 output
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
@@ -277,15 +291,15 @@ def autosave_render_end(scene):
 			ffmpeg_command += ' -pix_fmt yuv420p -movflags rtphint'
 			# Output file path
 			ffmpeg_command += ' ' + output_path + '.mp4'
-			
 			# Remove any accidental double or more spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('MP4 command: ' + ffmpeg_command)
+			print('FFmpeg MP4 command: ' + ffmpeg_command)
+			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
 			except Exception as exc:
-				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg MP4 command")
 		
 		# Custom output
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
@@ -315,15 +329,15 @@ def autosave_render_end(scene):
 			ffmpeg_command = ffmpeg_command.replace("{fps}", fps_float)
 			ffmpeg_command = ffmpeg_command.replace("{input}", glob_pattern)
 			ffmpeg_command = ffmpeg_command.replace("{output}", output_path)
-			
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('Custom command: ' + ffmpeg_command)
+			print('FFmpeg custom command: ' + ffmpeg_command)
+			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
 			except Exception as exc:
-				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg command")
+				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg custom command")
 	
 	# Increment the output serial number if it was used any output path
 	if bpy.context.scene.autosave_render_settings.output_file_serial_used:
@@ -560,10 +574,14 @@ def autosave_render_end(scene):
 	
 	return {'FINISHED'}
 
+
+
 ###########################################################################
-# Variable replacement function for globally accessible variables
-# Includes {duration}{rtime}{rH}{rM}{rS} only if valid 0.0+ float is supplied
-# Includes {serial} only if valid 0+ integer is supplied
+# Variable replacement function
+# •Prepopulate data that requires more logic
+# •Replace all variables
+# 	•Replaces {duration}{rtime}{rH}{rM}{rS} only if valid 0.0+ float is provided
+# 	•Replaces {serial} only if valid 0+ integer is provided
 
 def replaceVariables(string, rendertime=-1.0, serial=-1):
 	# Get scene from context
@@ -737,10 +755,14 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	string = string.replace("{batch}", format(scene.autosave_render_settings.batch_index, '04'))
 	return string
 
-###########################################################################
-# Time conversion functions, because datetime doesn't like zero-numbered days or hours over 24
 
-# Converts float seconds into [hour, minute, second] string array, with hours expand indefinitely (will not roll over into days)
+
+###########################################################################
+# Time conversion functions (because datetime doesn't like zero-numbered days or hours over 24)
+# •Convert float seconds into string as [hour, minute, second] array (hours expand indefinitely, will not roll over into days)
+# •Convert float seconds into string in HH:MM:SS.## format (hours expand indefinitely, will not roll over into days)
+# •Convert string in HH:MM:SS.## format into float seconds
+
 def secondsToStrings(sec):
 	seconds, decimals = divmod(float(sec), 1)
 	minutes, seconds = divmod(seconds, 60)
@@ -751,20 +773,45 @@ def secondsToStrings(sec):
 		"%02d.%02d" % (seconds, round(decimals*100))
 	]
 
-# Converts float seconds into HH:MM:SS.## format, hours expand indefinitely (will not roll over into days)
 def secondsToReadable(seconds):
 	h, m, s = secondsToStrings(seconds)
 	return h + ":" + m + ":" + s
 
-# Converts string of HH:MM:SS.## format into float seconds
 def readableToSeconds(readable):
 	hours, minutes, seconds = readable.split(':')
 	return int(hours)*3600 + int(minutes)*60 + float(seconds)
 
+
+
+###########################################################################
+# Copy string to clipboard
+
+class AutosaveRenderCopyToClipboard(bpy.types.Operator):
+	"""Copy variable to the clipboard"""
+	bl_label = "Copy to clipboard"
+	bl_idname = "vf.autosave_render_copy_to_clipboard"
+	bl_options = {'REGISTER', 'INTERNAL'}
+	
+	string: bpy.props.StringProperty()
+	
+	def invoke(self, context, event):
+		context.window_manager.clipboard = self.string
+		
+		# Close the popup panel by temporarily moving the mouse
+		x, y = event.mouse_x, event.mouse_y
+		context.window.cursor_warp(10, 10)
+		move_back = lambda: context.window.cursor_warp(x, y)
+		bpy.app.timers.register(move_back, first_interval=0.001)
+		
+		return {'FINISHED'}
+
+
+
 ###########################################################################
 # Notification system functions
+# •Send email notification
+# •Send Pushover notification
 
-# Send email notification
 def send_email(subject, message):
 	try:
 		msg = MIMEText(message)
@@ -777,7 +824,6 @@ def send_email(subject, message):
 	except Exception as exc:
 		print(str(exc) + " | Error in VF Autosave Render: failed to send email notification")
 		
-# Send Pushover notification
 def send_pushover(subject, message):
 	try:
 		r = requests.post('https://api.pushover.net/1/messages.json', data = {
@@ -796,6 +842,8 @@ def send_pushover(subject, message):
 			print(r.text)
 	except Exception as exc:
 		print(str(exc) + " | Error in VF Autosave Render: failed to send Pushover notification")
+
+
 
 ###########################################################################
 # Global user preferences and UI rendering class
@@ -1142,7 +1190,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			warning = box.column(align=True)
 			warning.label(text="WARNING:")
 			warning.label(text="Blender does not encrypt settings and stores credentials as plain text,")
-			warning.label(text="account details entered here are not secure")
+			warning.label(text="account details entered here are NOT SECURED in the file system")
 			
 			# Account
 			settings1 = subgrid.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=False, align=False)
@@ -1180,7 +1228,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 			warning = box.column(align=True)
 			warning.label(text="WARNING:")
 			warning.label(text="Blender does not encrypt settings and stores credentials as plain text,")
-			warning.label(text="API keys entered here are not secure")
+			warning.label(text="API keys entered here are NOT SECURED in the file system")
 			
 			# Account
 			settings1 = subgrid.column(align=True)
@@ -1435,6 +1483,8 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 
 ###########################################################################
 # Output Properties panel UI rendering classes
+# •Autosave Videos panel
+# •Autosave Render panel
 
 class RENDER_PT_autosave_video(bpy.types.Panel):
 	bl_space_type = 'PROPERTIES'
@@ -1610,8 +1660,11 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 
 ###########################################################################
 # Variable info popup and serial number UI
+# •Variable list popup panel
+# •Add variable list button and serial input at the top of the Render tab > Output panel
+# •Add variable list button and serial input at the top of the Compositing workspace > Node tab > Properties panel
 
-# Popup panel
+# Popup panel UI
 class AutosaveRenderVariablePopup(bpy.types.Operator):
 	"""List of the available variables"""
 	bl_label = "Variable List"
@@ -1645,32 +1698,12 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 				if ',' in item:
 					subrow = col.row(align = True)
 					for subitem in item.split(','):
-						ops = subrow.operator(AutosaveRenderVariableCopy.bl_idname, text = subitem, emboss = False)
+						ops = subrow.operator(AutosaveRenderCopyToClipboard.bl_idname, text = subitem, emboss = False)
 						ops.string = subitem
 				else:
-					ops = col.operator(AutosaveRenderVariableCopy.bl_idname, text = item, emboss = False)
+					ops = col.operator(AutosaveRenderCopyToClipboard.bl_idname, text = item, emboss = False)
 					ops.string = item
 		layout.label(text = 'Click a variable to copy it to the clipboard', icon = "COPYDOWN")
-
-# Copy string to clipboard
-class AutosaveRenderVariableCopy(bpy.types.Operator):
-	"""Copy variable to the clipboard"""
-	bl_label = "Copy to clipboard"
-	bl_idname = "vf.autosave_render_variable_copy"
-	bl_options = {'REGISTER', 'INTERNAL'}
-	
-	string: bpy.props.StringProperty()
-	
-	def invoke(self, context, event):
-		context.window_manager.clipboard = self.string
-		
-		# Close the popup panel by temporarily moving the mouse
-		x, y = event.mouse_x, event.mouse_y
-		context.window.cursor_warp(10, 10)
-		move_back = lambda: context.window.cursor_warp(x, y)
-		bpy.app.timers.register(move_back, first_interval=0.001)
-		
-		return {'FINISHED'}
 
 # Render output UI
 def RENDER_PT_output_path_variable_list(self, context):
@@ -1711,22 +1744,23 @@ def NODE_PT_output_path_variable_list(self, context):
 			input.prop(context.scene.autosave_render_settings, 'output_file_serial')
 			layout.use_property_split = False # Base path interface doesn't specify false, it assumes it, so the UI gets screwed up if we don't reset here
 
+
+
 ###########################################################################
-# Display render time in the Render panel
+# Display total render time at the bottom of the Render tab > Output panel
 
 def RENDER_PT_total_render_time_display(self, context):
 	if not (False) and bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_total_render_time:
 		layout = self.layout
-#		layout.use_property_decorate = False
-#		layout.use_property_split = True
 		box = layout.box()
 		box.label(text="Total time spent rendering: "+secondsToReadable(bpy.context.scene.autosave_render_settings.total_render_time))
 
+
+
 ###########################################################################
-# Display feedback in the Image viewer (primarily during rendering)
+# Display estimated time remaining in the Image viewer during rendering
 
 def image_viewer_feedback_display(self, context):
-	# Estimated render time remaining
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.show_estimated_render_time and bpy.context.scene.autosave_render_settings.estimated_render_time_active:
 		self.layout.separator()
 		box = self.layout.box()
@@ -1739,40 +1773,20 @@ def image_viewer_feedback_display(self, context):
 
 
 ###########################################################################
-# Set material and node for Batch Render feature
+# Batch Render Functions
+# •Process batch rendering queue
+#	•Cameras
+#	•Collections
+#	•Items (objects and/or lights)
+#	•Images (requires specific folder input and target material node)
+# •Set target material > node for Batch Render Images
 
-class VF_autosave_render_batch_assign_image_target(bpy.types.Operator):
-	bl_idname = 'render.vf_autosave_render_batch_assign_image_target'
-	bl_label = 'Assign image target'
-	bl_description = "Assign active node in material as target for batch rendering images"
-	bl_space_type = "NODE_EDITOR"
-	bl_options = {'REGISTER', 'UNDO'}
-	
-	@classmethod
-	def poll(cls, context):
-		return (
-			bpy.context.view_layer.objects.active
-			and bpy.context.view_layer.objects.active.active_material
-			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active
-			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE'
-		)
-
-	def execute(self, context):
-		# Assign active material from active object
-		context.scene.autosave_render_settings.batch_images_material = context.view_layer.objects.active.active_material.name
-		# Assign active node from active material from active object
-		context.scene.autosave_render_settings.batch_images_node = context.view_layer.objects.active.active_material.node_tree.nodes.active.name
-		return {'FINISHED'}
-
-###########################################################################
-# Batch Render
-
+# Process batch rendering queue
 class VF_autosave_render_batch(bpy.types.Operator):
 	bl_idname = 'render.vf_autosave_render_batch'
 	bl_label = 'Begin Batch Render'
 	bl_description = "Batch render specified elements"
 	bl_space_type = "VIEW_3D"
-#	bl_options = {'REGISTER', 'UNDO'}
 	
 	@classmethod
 	def poll(cls, context):
@@ -1784,14 +1798,12 @@ class VF_autosave_render_batch(bpy.types.Operator):
 	def draw(self, context):
 		try:
 			layout = self.layout
-#			layout.operator_context = 'INVOKE_DEFAULT' # 'INVOKE_AREA'
 			layout.label(text="Blender will be unresponsive while processing, proceed?")
 		except Exception as exc:
 			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Begin Batch Render confirmation header')
 	
 	def execute(self, context):
 		context.scene.autosave_render_settings.batch_active = True
-#		print('Batch Render Process Started')
 		
 		# Preserve manually entered batch index
 		original_batch_index = context.scene.autosave_render_settings.batch_index
@@ -1837,17 +1849,11 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# Restore original active camera
 			bpy.context.scene.camera = original_camera
 		
-		
-		
 		# Batch render collections
 		if context.scene.autosave_render_settings.batch_type == 'cols':
 			# If we need to support direct selection of multiple collections...
 			# https://blender.stackexchange.com/questions/249139/selecting-a-collection-via-python
-			# ...but for now I'm keeping this initial release simpler
-			
-			# Preserve active collection
-#			original_active = context.view_layer.active_layer_collection
-			# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
+			# ...but for now I'm keeping this simpler
 			
 			# If child collections exist
 			if len(context.view_layer.active_layer_collection.children) > 0:
@@ -1882,9 +1888,7 @@ class VF_autosave_render_batch(bpy.types.Operator):
 				# Set current collection name
 				context.scene.autosave_render_settings.batch_collection_name = col.name
 				
-				# Set current collection to active and renderable
-#				bpy.context.view_layer.active_layer_collection = col
-				# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
+				# Set current collection rendering status
 				col.collection.hide_render = False
 				col.exclude = False
 				
@@ -1911,13 +1915,6 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			
 			# Reset batch rendering variable
 			context.scene.autosave_render_settings.batch_collection_name = ''
-			
-			# Restore original active collection
-#			if original_active:
-#				context.view_layer.active_layer_collection = original_active
-			# This isn't actually needed since the active_layer_collection never updates during script processing, and doesn't work
-		
-		
 		
 		# Batch render items
 		if context.scene.autosave_render_settings.batch_type == 'itms':
@@ -1987,8 +1984,6 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			if original_active:
 				context.view_layer.objects.active = original_active
 		
-		
-		
 		# Batch render images
 		if context.scene.autosave_render_settings.batch_type == 'imgs':
 			# Get source folder and target names
@@ -2047,16 +2042,46 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			if original_image:
 				target.image = original_image
 		
-		
-		
 		# Restore manually entered batch index
 		context.scene.autosave_render_settings.batch_index = original_batch_index
 		
 		context.scene.autosave_render_settings.batch_active = False
 		return {'FINISHED'}
 
+# Set target material > node for Batch Render Images
+class VF_autosave_render_batch_assign_image_target(bpy.types.Operator):
+	bl_idname = 'render.vf_autosave_render_batch_assign_image_target'
+	bl_label = 'Assign image target'
+	bl_description = "Assign active node in material as target for batch rendering images"
+	bl_space_type = "NODE_EDITOR"
+	bl_options = {'REGISTER', 'UNDO'}
+	
+	@classmethod
+	def poll(cls, context):
+		# Check if necessary object > material > node > node type is selected
+		return (
+			bpy.context.view_layer.objects.active
+			and bpy.context.view_layer.objects.active.active_material
+			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active
+			and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE'
+		)
+	
+	def execute(self, context):
+		# Assign active material from active object
+		context.scene.autosave_render_settings.batch_images_material = context.view_layer.objects.active.active_material.name
+		# Assign active node from active material from active object
+		context.scene.autosave_render_settings.batch_images_node = context.view_layer.objects.active.active_material.node_tree.nodes.active.name
+		return {'FINISHED'}
+
+
+
 ###########################################################################
-# Batch Render UI rendering class
+# Batch Render UI
+# •VF Tools > Batch Render Panel
+#	•Cameras
+#	•Collections
+#	•Items (objects and/or lights)
+#	•Images (with folder and material node selection)
 
 class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 	bl_idname = 'VFTOOLS_PT_batch_render_setup'
@@ -2079,11 +2104,9 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Batch Render panel header')
 			
 	def draw(self, context):
-#		try:
 		if True:
 			# UI Layout
 			layout = self.layout
-#			layout.use_property_split = True
 			layout.use_property_decorate = False # No animation
 			
 			# General variables
@@ -2108,8 +2131,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 						feedback_text=str(batch_count) + ' camera selected'
 					else:
 						feedback_text=str(batch_count) + ' cameras selected'
-#					feedback_icon='VIEW_CAMERA'
-					feedback_icon='CAMERA_DATA'
+					feedback_icon='CAMERA_DATA' # Alt: VIEW_CAMERA
 				
 				# If no cameras are selected, check for an active collection
 				elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']) > 0:
@@ -2129,10 +2151,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 			
-			
-			
 			# Settings for Collections
-			# len(context.view_layer.active_layer_collection.children)
 			if context.scene.autosave_render_settings.batch_type == 'cols':
 				# Collection children (no direct selection of collections currently supported)
 				batch_count = len(context.view_layer.active_layer_collection.children)
@@ -2153,8 +2172,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				# Display feedback
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
-			
-			
 			
 			# Settings for Items
 			if context.scene.autosave_render_settings.batch_type == 'itms':
@@ -2187,8 +2204,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 			
-			
-			
 			# Settings for Images
 			if context.scene.autosave_render_settings.batch_type == 'imgs':
 				# Source directory
@@ -2207,7 +2222,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					feedback_text='Invalid location'
 					feedback_icon='ERROR'
 					batch_error = True
-#					print('VF Autosave Batch Render: Image source directory not found.')
 				feedback = input1.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 				
@@ -2224,25 +2238,21 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				if bpy.data.materials.get(context.scene.autosave_render_settings.batch_images_material) and bpy.data.materials[context.scene.autosave_render_settings.batch_images_material].node_tree.nodes.get(context.scene.autosave_render_settings.batch_images_node):
 					feedback_text = context.scene.autosave_render_settings.batch_images_material + ' > ' + context.scene.autosave_render_settings.batch_images_node
 					feedback_icon = 'NODE'
-				elif len(context.scene.autosave_render_settings.batch_images_material) > 0:
+				else:
 					feedback_text = 'Select object > material > image node'
 					feedback_icon = 'ERROR'
 					batch_error = True
 				feedback = input2.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 			
-			
-			
 			# Final settings and start render
 			input3 = layout.column(align=True)
 			
 			# Read-only batch index field
 			field = input3.row(align=True)
-#			field.active = False
 			field.prop(context.scene.autosave_render_settings, 'batch_index', icon='MODIFIER') # PREFERENCES MODIFIER
 			
 			# Batch range setting (still or sequence)
-#			input3 = layout.column(align=True)
 			buttons = input3.row(align=True)
 			buttons.prop(context.scene.autosave_render_settings, 'batch_range', expand = True)
 			
@@ -2251,7 +2261,6 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 			if batch_count == 0 or batch_error:
 				button.active = False
 				button.enabled = False
-#				batch_text = 'Fix Errors'
 				batch_text = 'Batch Render'
 				batch_icon = 'ERROR'
 			else:
@@ -2265,27 +2274,25 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					batch_icon = 'RENDER_ANIMATION'
 				batch_text += 's' if batch_count > 1 else ''
 			button.operator(VF_autosave_render_batch.bl_idname, text=batch_text, icon=batch_icon)
-#		except Exception as exc:
-#			print(str(exc) + ' | Error in VF Autosave Render + Output Variables: Batch Render panel')
 
 
 
 ###########################################################################
 # Addon registration functions
+# •Define classes being registered
+# •Registration function
+# •Unregistration function
 
-classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderVariableCopy, VF_autosave_render_batch_assign_image_target, VF_autosave_render_batch, VFTOOLS_PT_autosave_batch_setup)
+classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderCopyToClipboard, VF_autosave_render_batch_assign_image_target, VF_autosave_render_batch, VFTOOLS_PT_autosave_batch_setup)
 
 def register():
 	for cls in classes:
 		bpy.utils.register_class(cls)
+	# Settings reference
 	bpy.types.Scene.autosave_render_settings = bpy.props.PointerProperty(type=AutosaveRenderSettings)
-	# Using init instead of render_pre means that the entire animation render time is tracked instead of just the final frame
-	# bpy.app.handlers.render_pre.append(autosave_render_start)
+	# Rendering events
 	bpy.app.handlers.render_init.append(autosave_render_start)
-	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
 	bpy.app.handlers.render_post.append(autosave_render_estimate)
-	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
-	# bpy.app.handlers.render_post.append(autosave_render_end)
 	bpy.app.handlers.render_cancel.append(autosave_render_end)
 	bpy.app.handlers.render_complete.append(autosave_render_end)
 	# Render estimate display
@@ -2301,14 +2308,11 @@ def register():
 def unregister():
 	for cls in reversed(classes):
 		bpy.utils.unregister_class(cls)
+	# Settings reference
 	del bpy.types.Scene.autosave_render_settings
-	# Using init instead of render_pre means that the entire animation render time is tracked instead of just the final frame
-	# bpy.app.handlers.render_pre.remove(autosave_render_start)
+	# Rendering events
 	bpy.app.handlers.render_init.remove(autosave_render_start)
-	# Using render_post to calculate estimated time remaining only for animations (when more than one frame is rendered in sequence)
 	bpy.app.handlers.render_post.remove(autosave_render_estimate)
-	# Using cancel and complete, instead of render_post, prevents saving an image for every frame in an animation
-	# bpy.app.handlers.render_post.remove(autosave_render_end)
 	bpy.app.handlers.render_cancel.remove(autosave_render_end)
 	bpy.app.handlers.render_complete.remove(autosave_render_end)
 	# Render estimate display
