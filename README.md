@@ -1,8 +1,41 @@
 # VF Autosave Render + Output Variables
 
-Automatically saves a numbered or dated image after every render and extends the Blender output path and compositing output node with dynamic variables for final renders. This Blender add-on helps automate file naming (enabling more advanced production workflows) and makes look development renders easier to review and compare (saving what would otherwise be overwritten or lost when quitting the app).
+Automates file naming with dynamic variables in the standard output path and compositing file output nodes, and  enables more advanced production workflows with various kinds of batch rendering, automatic compiling of image sequences into videos using FFmpeg, and saving a numbered, dated, or custom formatted image after every render. Render time estimation and logging is also tracked.
 
 ![screenshot of the variable popup window in the Blender compositing tab](images/banner.jpg)
+
+
+
+
+
+
+
+----------
+
+### Documentation Sections:
+
+- Introduction
+	- [Installation and Usage](https://github.com/jeinselen/VF-BlenderAutosaveRender#installation-and-usage)
+	- [Global Preferences](https://github.com/jeinselen/VF-BlenderAutosaveRender#global-preferences)
+- Variables
+	- [Variables List](https://github.com/jeinselen/VF-BlenderAutosaveRender#variables-list)
+	- [Render Output](https://github.com/jeinselen/VF-BlenderAutosaveRender#render-output)
+	- [File Output Nodes](https://github.com/jeinselen/VF-BlenderAutosaveRender#file-output-nodes)
+- Autosaving
+	- [Autosave Videos](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-videos)
+	- [Autosave Images](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-images)
+- Batches
+	- [Batch Render](https://github.com/jeinselen/VF-BlenderAutosaveRender#batch-render)
+- Extras
+	- [Estimated Time Remaining](https://github.com/jeinselen/VF-BlenderAutosaveRender#estimated-time-remaining)
+	- [Render Complete Notifications](https://github.com/jeinselen/VF-BlenderAutosaveRender#render-complete-notifications)
+	- [Notes](https://github.com/jeinselen/VF-BlenderAutosaveRender#notes)
+
+----------
+
+
+
+
 
 
 
@@ -11,49 +44,69 @@ Automatically saves a numbered or dated image after every render and extends the
 - Download [VF_autosaveRender.py](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutoSaveRender/main/VF_autosaveRender.py)
 - Open Blender Preferences and navigate to the "Add-ons" tab
 - Install and enable the add-on
-- It will be enabled by default in the Render Output panel, where you can customise the automatic file output settings
+- Basic autosaving and variable features will be turned on by default, with more options in the preferences
 
 **Note for Viewport Rendering:** Blender does not trigger pre-render and post-render events when using `Viewport Render Image`, `Viewport Render Keyframes`, and `Viewport Render Animation`, which means this plugin is never informed that a render is happening. Unfortunately Blender uses the same output directory for both saving viewport images and actual rendering; output files will still be saved from the viewport, but the unresolved variable names will be used instead of the expected dynamic content. [Please see this issue report for more details and potential workarounds for playblast style rendering.](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/issues/7)
 
-![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.png)
+![screenshot of Blender's Render Output user interface with the add-on installed](images/screenshot0-main.jpg)
 
 The default settings will work as-is, saving each render in a folder alongside the project file with automatic serialisation and JPG compression. But significant customisation is possible, especially through the use of output path and file name variables.
 
 
 
+
+
+
+
 ## Global Preferences
 
-Add-on preferences are found in the Blender Preferences panel add-on tab, at the bottom of the plugin listing. These settings apply globally, except for the `Total Render Time` value which is saved within the project file.
+![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1-preferences.jpg)
 
-![screenshot of the add-on's user preferences in the Blender Preferences Add-ons panel](images/screenshot1-preferences.png)
+Plugin settings are found in the Blender Preferences panel add-on tab. These settings apply globally to all projects opened on the local system, except for the `Total Render Time` value which is saved within individual project files.
 
-### Preferences
-- `Render Output Variables` enables dynamic variables in the output file path
-- `File Output Node Variables ` enables dynamic variables for the base path and all image inputs of `File Output` nodes in the Compositing tab (see the [Compositing Node Variables](https://github.com/jeinselenVF/VF-BlenderAutosaveRender#compositing-node-variables) section below)
+- `Render Variables` enables dynamic variables in the Render tab > Output panel *output path* and File Output nodes in the Compositor workspace
+	- Variables are supported in both the base path and all image inputs of File Output nodes (see the [File Output Nodes](https://github.com/jeinselen/VF-BlenderAutosaveRender#file-output-nodes) section below)
 
-### Render Time
-- `Show Project Render Time` toggles the "total time spent rendering" display in the Blender Output panel
-	- `Total Render Time` allows manual adjustment or resetting of the current project's render time tracking (this is the only non-global per-project value in the plugin settings panel)
+- `Autosave Videos` if FFmpeg is installed, enables the Render tab > Output panel > Autosave Videos interface, which has options for compiling completed image sequences to ProRes, MP4, and custom FFmpeg command line strings (see the [Autosave Videos](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-videos) section for more details)
+	- Installation location is autodetected, but can be set to a custom location if needed
+
+- `Autosave Images` saves an image every time rendering is completed or canceled (saving current progress), using the custom settings in the Render tab > Output panel  (see the [Autosave Images](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-images) section for more details)
+	- `Global Overrides` allows for overriding the autosaved file `Location`, `Name`, and `Format`, ignoring per-project settings in the Render tab > Output panel > Autosave Images section
+	- The global override settings are the same as the Render tab settings (documented below), and any settings that are overridden, though still editable, will be greyed out in the Autosave Images panel to indicate they're being globally replaced
+	- Be warned that updating or disabling/re-enabling the plugin will erase global override settings, including resetting the serial number variable back to 0 (like all plugins, non-project preferences like these global settings are erased when a plugin is disabled or replaced)
+
+
+
+
+- `Show Estimated Render Time` displays the estimated time till completion in the render window menu bar (see the [Estimated Time Remaining](https://github.com/jeinselen/VF-BlenderAutosaveRender#estimated-time-remaining) section for details)
+
+- `Show Project Render Time` toggles the "total time spent rendering" display in the Render tab > Output panel below the output settings
+	- `Total Render Time` allows manual adjustment or resetting of the current project's render time tracking (this is the only value in the plugin settings panel that is unique per project)
+	- The total render time value in the project will not increment when rendering files from the command line unless the project is explicitly saved after rendering concludes (this does not apply to the externally saved log file)
 - `Save External Render Time Log` enables tracking of render time outside of the Blender file, supporting tracking during command line rendering (where the internal project value is typically not saved) or tallying the render time for all Blender projects in the same directory
 	- Sub-folders and relative paths can be used (not absolute paths)
 	- Only the `{project}` dynamic variable is supported
 	- The default string `{project}-TotalRenderTime.txt` will save a dynamically labeled file alongside the project (logging render time per-project since each log file would be named per-project)
 	- Using `TotalRenderTime.txt` will allow all Blender files in the same directory to use the same log file (logs would be per-directory, not per-project)
 	- Whereas `{project}/TotalRenderTime.txt` will save the log file inside the default autosave directory (this is specific to MacOS and Linux; backslash would be required in Windows)
-- `Estimate Remaining Render Time` turns on animation render time estimation in the render window menu bar (see the [Estimated Time Remaining](https://github.com/jeinselenVF/VF-BlenderAutosaveRender#estimated-time-remaining) section below for details)
-
-### Global Autosave Overrides
-- This section allows for overriding autosave settings globally, making it easier to set up a single location for all autosaved renders, along with consistent name formatting and file types, especially for files created prior to setting up the Autosave Render plugin
-- The global override settings are the same as detailed below, and any elements that are overridden will be greyed out (though still editable) in the project's Autosave Render panel
-- Replacing or even just disabling the plugin will erase global override settings, including resetting the serial number variable back to 0. If this is being used to prevent file overwriting in a global override location, it's imperative to manually update the serial with the correct number after every time the plugin is disabled/enabled or uninstalled/installed.
 
 
 
-## Dynamic Variables
+- Notification systems require careful review of the security risks, please see the [Render Complete Notifications](https://github.com/jeinselen/VF-BlenderAutosaveRender#render-complete-notifications) section below for more details
 
-Dynamic variables can be used in Blender's Output Path, in the Base Path and File Subpath strings of File Output nodes in the Compositing tab, and in the Custom String setting of the Autosave Render sub-panel.
 
-![screenshot of the add-on's custom variable popup window](images/screenshot3-variables.png)
+
+
+
+
+
+---
+
+## Variables List
+
+Dynamic variables can be used in the `Base Path` and individual input `File Subpath` strings of `File Output` nodes in the Compositing workspace, in the Render tab > Output panel > `Output Path`, and in the `Autosave Videos` and `Autosave Images` sub-panels for dynamically generated output locations and/or file names. Details about each of these features is available below the variable definitions here.
+
+![screenshot of the add-on's custom variable popup window](images/screenshot2-variables.jpg)
 
 The available variables are sorted into four groups: Project (values derived from the project itself), Rendering (render engine settings), System (the computer system), and Identifiers (values unique to the time or iteration of the render).
 
@@ -105,11 +158,13 @@ The available variables are sorted into four groups: Project (values derived fro
   - `{rH}` = just the hours component from `{rtime}`
   - `{rM}` = just the minutes component from `{rtime}`
   - `{rS}` = just the seconds component from `{rtime}`
-    - **Limitation:** render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
-    - Post-render plugin features that support render time variables include:
-    	- Autosave Video
-    	- Autosave Image
-    	- Notifications
+    - Render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
+    	- Post-render plugin features that support render time variables include:
+    		- `Autosave Videos` and `Autosave Images` features in the Render tab > Output panel
+    		- Render complete notifications
+    	- Pre-render plugin features that do *<u>not</u>* support render time variables include:
+    		- `Output Path` in the Render tab > Output panel
+    		- `Image Output` nodes in the Compositing workspace
     - Rendering duration is calculated within the script at render start and end, and may not _exactly_ match the render metadata (which is unavailable in the Python API)
 4. **System variables**
   - `{host}` = name of the computer or host being used for rendering
@@ -149,9 +204,63 @@ _**Warning:**_ using a custom string may result in overwriting or failing to sav
 
 
 
-## Autosave Settings
 
-![screenshot of the add-on's project settings panel with customised autosave settings](images/screenshot2-autosave.png)
+
+
+
+## Render Output
+
+![screenshot of the Blender Render tab Output panel with sample variables and to the left, the variable list popup panel floating over the 3D viewport](images/screenshot3-output.jpg)
+
+When the `Render Variables` option is enabled in preferences, the native Blender `Output Path` is extended with all but the render time options; `{duration}` `{rtime}` `{rH}` `{rM}` and `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
+
+This works well for automatic naming of animations because the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
+
+However, note that when rendering still images (which Blender won't automatically save), and the output path includes a serial number, the serial number will still be incremented even though the still image wasn't rendered. This is because Blender doesn't differentiate between still and sequences renders when triggering rendering start; the plugin can't tell if the output will be saved or not by Blender when a render starts, and must assume that the output path needs to be prepped (attempting to work around this is difficult, and could easily introduce bugs where the serial number doesn't increment correctly, a situation that should definitely be avoided).
+
+
+
+
+
+
+
+## File Output Nodes
+
+![screenshot of the compositing workspace with a file output node using sample variables and the variable popup panel that lists all of the available variables](images/screenshot4-node.jpg)
+
+When the `Render Variables` option is enabled in preferences, `File Output` nodes in the Compositing tab are extended with all but the total render time options; `{duration}` `{rtime}` `{rH}` `{rM}` and `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
+
+This feature supports customisation of both the `Base Path` and each image input `File Subpath` in the node. Like the render output variables feature, this fully supports animations, including the date and time variables which are set at render start (not per-frame).
+
+
+
+
+
+
+
+---
+
+## Autosave Videos
+
+![screenshot of the Blender Render Output sub-panel Autosave Videos with sample options selected and output variables used in the file names for both ProRes and MP4 output](images/screenshot5-videos.jpg)
+
+This feature is still in very early testing and is not ready for an official release yet. If you'd like to try it out, however, it's available by downloading the plugin [directly from the repository](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutosaveRender/main/VF_autosaveRender.py) instead of the releases page. You will need to have a local [FFmpeg installation](https://ffmpeg.org/download.html) on your system to use this feature (the version bundled inside Blender doesn't seem to be accessible via the Python API).
+
+If enabled in the plugin settings along with a valid FFmpeg path, options to automatically compile rendered image sequences into playable videos after rendering completes will appear in the rendering output panel labeled `Autosave Video`. Apple ProRes (Proxy, LT, 422, an HQ presets available), H.264 MP4 (with adjustable quality), and custom string (using variables for `{input}` `{fps}` and `{output}`) are all available, and can be enabled concurrently for multi-format outputs.
+
+FFmpeg only supports some of the image formats that Blender does. The standard formats found in FFmpeg 4.4.x are used by default; bmp, png, jpg, dpx, exr (single layer only), and tif. If there's a mismatch in your particular Blender + FFmpeg setup, you can find the supported file list for your installation of FFmpeg by entering `ffmpeg -formats` in a command line terminal (look for sequence formats), and then modifying the `FFMPEG_FORMATS` list found near the top of the plugin code to correct any issues.
+
+If you run into any issues, especially when using the custom option, try running Blender in terminal mode to check for error codes. If you have any questions about FFmpeg command line formatting, please check https://ffmpeg.org for documentation.
+
+
+
+
+
+
+
+## Autosave Images
+
+![screenshot of the Blender Render Output sub-panel Autosave Images with the default options selected](images/screenshot6-images.jpg)
 
 Project settings are found at the bottom of the Render Output panel and are unique per-project. Automatic saving of every render can be disabled by unchecking `Autosave Render`, which is turned on by default.
 
@@ -176,97 +285,104 @@ Project settings are found at the bottom of the Render Output panel and are uniq
 
 - `File Format`
 	- `Project Setting` will use the same format as set in the Render Output panel (see note below about multilayer EXR limitations)
+		- If an EXR format is selected in the Output panel, only a single layer EXR will be autosaved from this sub-panel; the Blender Python API `image.save_image` has a known and long-standing bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087)
+		- This issue does not impact any other rendering features
 	- `PNG`
 	- `JPEG`
 	- `OpenEXR`
 
 File formats will use whatever compression preferences have been set in the project file. If you want to render animations using the PNG format, but save previews using JPG with a specific compression level, temporarily choose JPG as the Blender output format and customise the settings, then switch back to PNG. When the add-on saves the render file, it'll use the (now invisible) JPG settings saved in the project file.
 
-
-
-## Autosave Video Settings
-
-This feature is still in very early testing and is not ready for an official release yet. If you'd like to try it out, however, it's available by downloading the plugin [directly from the repository](https://raw.githubusercontent.com/jeinselenVF/VF-BlenderAutosaveRender/main/VF_autosaveRender.py) instead of the releases page. You will need to have a local [FFmpeg installation](https://ffmpeg.org/download.html) on your system to use this feature (the version bundled inside Blender doesn't seem to be accessible via the Python API).
-
-If enabled in the plugin settings along with a valid FFmpeg path, options to automatically compile rendered image sequences into playable videos after rendering completes will appear in the rendering output panel labeled `Autosave Video`. Apple ProRes (Proxy, LT, 422, an HQ presets available), H.264 MP4 (with adjustable quality), and custom string (using variables for `{input}` `{fps}` and `{output}`) are all available, and can be enabled concurrently for multi-format outputs.
-
-FFmpeg only supports some of the image formats that Blender does. The standard formats found in FFmpeg 4.4.x are used by default; bmp, png, jpg, dpx, exr (single layer only), and tif. If there's a mismatch in your particular Blender + FFmpeg setup, you can find the supported file list for your installation of FFmpeg by entering `ffmpeg -formats` in a command line terminal (look for sequence formats), and then modifying the `FFMPEG_FORMATS` list found near the top of the plugin code to correct any issues.
-
-If you run into any issues, especially when using the custom option, try running Blender in terminal mode to check for error codes. If you have any questions about FFmpeg command line formatting, please check https://ffmpeg.org for documentation.
+Only the final frame will be autosaved when rendering animation sequences, preventing mass duplication of frames but still allowing for total render time to be saved in the file name (if included with the `Custom String` setting and the `{duration}` or other render time variables)
 
 
 
-## Render Output Variables
-
-![screenshot of the Blender Output tab with sample variables](images/screenshot4-output.png)
-
-If enabled in the add-on preferences, this extends the native Blender output path with all but the total render time options listed above. The `{duration}` `{rtime}` `{rH}` `{rM}` `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
-
-This works well for automatic naming of animations because the variables are processed at rendering start and will remain unchanged until the render is canceled or completed. Starting a new render will update the date, time, serial number, or any other variables that might have been changed.
 
 
 
-## Compositing Node Variables
 
-![screenshot of the compositing tab file output node with sample variables and the variable popup window](images/screenshot5-node.png)
+---
 
-If enabled in the add-on preferences, this extends `File Output` nodes in the Compositing tab with all but the total render time options listed above. The `{duration}` `{rtime}` `{rH}` `{rM}` `{rS}` variables are not available because the data does not exist before rendering starts when these variables must be set. If the keyword `{serial}` is used anywhere in the output string, the `Serial Number` value will be enabled. Click the `Variable List` button to see a popup of all available keywords.
+## Batch Render
 
-This feature supports customisation of both the `Base Path` and each image input `File Subpath` in the node. Like the render output variables feature, this fully supports animations, including the date and time variables which are set at render start (not per-frame).
+![screenshot of the Batch Render panel in the VF Tools tab showing three sub-collections that are ready for batch rendering](images/screenshot7-batch.jpg)
+
+The `Batch Render` interface appears in the `VF Tools` tab of any 3D view, and allows the user to select from a number of batch options.
+
+- `Batch Type` sets the batch rendering mode
+	- `Cameras` renders each selected camera or each camera in the selected collection
+	- `Collections` renders each child collection within the selected collection
+		- Little bit of trivia; this is how the BCON 2023 [Production Pipelines for Interactive Platforms](https://www.youtube.com/watch?v=Uu35wS8iDJ8) presentation slides were rendered
+	- `Items` renders each selected item, or each item in the selected collection
+	- `Images` renders each image in a source folder, replacing the source of a single target Image Texture node each time
+		- `Source Folder` sets the input folder of images that should be used for batch rendering
+		- `Assign Image Node` will assign the currently selected Object > Material > Image Texture node as the target (this must be assigned before batch rendering will be enabled in this mode)
+	- If no valid selection, collection, or texture source is found, a warning will appear in the UI to indicate the issue
+- `Batch Index` this can be manually entered for testing of procedural systems, but during batch rendering will be set to the index of the current element in the batch list
+- `Batch Range`
+	- `Image` will render the current frame once for each element in the batch list
+	- `Animation` will render the entire scene frame range for each element in the batch list
+
+Batch render relies on the Python API to trigger each render, so Blender will freeze during processing with no updates visible (except for files being saved). This is a limitation of the Blender Python API and its heavy reliance on static context to operate.
 
 
+
+
+
+
+
+---
 
 ## Estimated Time Remaining
 
-![screenshot of the estimated render time remaining display in the menu bar of the Blender render window](images/screenshot6-estimate.png)
+![screenshot of the estimated render time remaining display in the menu bar of the Blender render window](images/screenshot8-estimate.jpg)
 
-When enabled in the plugin preferences, the plugin can track elapsed time during animation rendering and calculate a rough estimate based on the number of frames completed versus remaining.
-
-This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability in render time from frame to frame, but can give a general guess as to how much render time remains.
+When enabled in the preferences, time elapsed during animation renders will be tracked, and a rough estimate will be calculated for the remaining render time. This isn't particularly accurate, especially during the first few frames or in scenes with a great deal of variability from frame to frame, but can give a general idea of how much render time might remain.
 
 The estimation will only show up after the first frame of an animation sequence is completed, and will not be displayed during single frame renders.
 
 
 
-## Batch Render Automation
 
-_**Warning:**__ this is an experimental feature as of version 2.3, and is not fully implemented or documented yet.
-
-The `Batch Render` interface appears in the `VF Tools` tab of any 3D view, and allows the user to select from a number of options.
-
-Only the image folder batch system is currently operational; it requires a target material > image node to be set along with a source folder of textures, after which a still image or animation sequence can be rendered for each texture in the source directory.
-
-The intention is to include batch rendering for cameras, items, and collections in the future, all designed to work with the dynamic output variables for easy output formatting.
 
 
 
 ## Render Complete Notifications
 
-_**Warning:**__ this is an experimental feature as of version 2.4, and is not fully documented yet.
+Notifications all support the full list of render variables, so feel free to customise however you need. However, there are security issues with how Blender saves preferences; they're always plain text. Please read the warnings detailed below and proceed at your own risk.
 
-Triggers an email and/or push notification on render completion.
+![screenshot of the estimated render time remaining display in the menu bar of the Blender render window](images/screenshot9-notifications.jpg)
 
-Email setup requires an SMTP server with login credentials. Please note that while the Blender field is "protected" as a password (it only displays asterisks), it still allows for direct copying of the original password and stores it as plain text within the Blender user preferences file. It's not actually "protected" at all and is _dangerously_ insecure. If you choose to use this feature (_never_ with your primary email account!), you do so entirely at your own risk.
+- `Minimum Render Time` sets the threshold before notifications will be sent when a render is completed, measured in seconds (the default setting of 300 seconds = 5 minutes)
+	- This is intended to prevent constant notifications of super short renders, but setting it to 0 will result in all notifications being sent
+- `Email Notification` sends an email to any number of addresses on render completion, including texting mobile phones using email-to-text (depending on carrier support)
+	- Blender does not encrypt plugin settings when saved to disk; the login password is stored as plain text so use this feature entirely at your own very, very terrible risk*
+	- Even worse, the Python setup being used here doesn't work with accounts that use OAuth, two-factor authentication, or other security methods, so it really is about the most insecure setup possible
+	- Manually encrypting secure content has been considered, but still requires saving the encryption key locally for reference; giving the *illusion* of better security (obscurity does help a little) without actually making it secure (they key would still be saved as plain text just like every other Blender preference)...if anyone has experience supporting OAuth or similar security setups within the Blender ecosystem, let me know!
+- `Pushover Notification` sends a push notification to browsers and mobile devices on render completion
+	- [Pushover](https://pushover.net) is a paid third-party service that supports browser notifications, iOS, and Android mobile devices (affordable one-time purchase for individuals, or a subscription for teams)
+	- Once an account is created, you will need to set up a specific application key so Blender can access the API. It's super simple, and gives you up to 10k push notifications a month per app code without any additional costs.
+	- Blender does not encrypt plugin settings when saved to disk; the user key and app token are stored as plain text so use this feature *entirely at your own risk*
+- `Siri Announcement` is only available in MacOS; this announces render completion using the local Siri settings
+	- `Siri Message` customises the spoken message, all dynamic variables are supported
+	- The command blocks further processing till the message is completed, so long strings aren't ideal (you have to wait till they finish to continue using Blender)
 
-The default email settings are for a generic Gmail account, which requires a dedicated application code that is only available after two factor authentication is turned on. This is not recommended from a security standpoint (that unsecured password in Blender gives full access to the gmail account), and again, should only be used with a burner email account at your own risk.
+### Details Regarding Email Notifications
+
+Email setup requires an SMTP server with login credentials. Please note that while the Blender field is "protected" as a password (it only displays asterisks), it still allows for direct copying of the original password and stores it as plain text within the Blender user preferences file. <u>It's not actually protected at all and is *dangerously insecure*</u>. If you choose to use this feature (*never* with your primary email account), you do so entirely at your own risk.
+
+The default email settings are for a generic Gmail account, which requires a dedicated application code that is only available when two factor authentication is turned on. This is not recommended from a security standpoint (that unsecured password in Blender gives full access to the gmail account), and again, should only be used with a burner email account and is entirely at your own risk.
 
 If you would like to be notified via text message to a mobile phone number, please use email notifications sent to your carrier of choice, you can find the correct address for your phone number here: [Free Carrier Lookup](https://freecarrierlookup.com).
 
-Mobile device push notifications rely on the Pushover service, a non-subscription one-time-purchase app for iOS or Android. Once an account is created, you will need to set up a specific application key so Blender can access the API. It's super simple, and gives you up to 10k push notifications a month per app code without any additional costs.
 
-For MacOS users, Siri can also audibly announce the render.
 
-The notification systems support all output variables listed above, including total render time.
+
 
 
 
 ## Notes
 
-- Autosaving a render depends on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or local directory for the add-on to work with
+- Autosaving a render, compiling sequences into videos, and other features depend on the Blender project file having been saved at least once in order to export images, otherwise there is no project name or local directory for the add-on to work with
 	- An alternative version of the plugin that supports unsaved projects is [available in this older branch](https://github.com/jeinselenVF/VF-BlenderAutosaveRender/tree/Support_Unsaved_Projects)
-- Only the final frame will be autosaved when rendering animation sequences, preventing mass duplication of frames but still allowing for total render time to be saved in the file name (if included with the `Custom String` setting)
-- Total internal render time will continue to increment even when auto file saving is toggled off in the output panel
-- Total internal render time will not increment when rendering files from the command line, since it depends on being saved within the project file (the command line interface doesn't typically save the project file after rendering is completed unless otherwise triggered)
-- The Blender Python API `image.save_image` has a known bug that [prevents the saving of multilayer EXR files](https://developer.blender.org/T71087), saving only a single layer file instead
-	- I'm not aware of any reasonable workarounds, currently waiting for the Blender team to fix the issue
 - This add-on is provided as-is with no warranty or guarantee regarding suitability, security, safety, or otherwise. Use at your own risk.
