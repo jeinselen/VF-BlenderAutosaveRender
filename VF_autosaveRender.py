@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 3),
+	"version": (2, 8, 4),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -679,14 +679,17 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	if bpy.context.view_layer.objects.active:
 		# Set active object name
 		projectItem = bpy.context.view_layer.objects.active.name
+		
 		if bpy.context.view_layer.objects.active.active_material:
 			# Set active material slot name
 			projectMaterial = bpy.context.view_layer.objects.active.active_material.name
-			if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active:
-				# Set active node name or image name if available
-				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.has_data:
+			
+			if bpy.context.view_layer.objects.active.active_material.use_nodes and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active:
+				if bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.type == 'TEX_IMAGE' and bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image:
+					# Set active texture node image name
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.image.name
 				else:
+					# Set active node name
 					projectNode = bpy.context.view_layer.objects.active.active_material.node_tree.nodes.active.name
 	
 	# Set node name to the Batch Render Target if active and available
@@ -701,7 +704,7 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	string = string.replace("{project}", os.path.splitext(os.path.basename(bpy.data.filepath))[0])
 	string = string.replace("{scene}", scene.name)
 	string = string.replace("{viewlayer}", bpy.context.view_layer.name)
-	string = string.replace("{collection}", scene.autosave_render_settings.batch_collection_name if len(scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name) # Alt: bpy.context.view_layer.active_layer_collection.name
+	string = string.replace("{collection}", scene.autosave_render_settings.batch_collection_name if len(scene.autosave_render_settings.batch_collection_name) > 0 else bpy.context.collection.name)
 	string = string.replace("{camera}", scene.camera.name)
 	string = string.replace("{item}", projectItem)
 	string = string.replace("{material}", projectMaterial)

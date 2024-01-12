@@ -1,6 +1,6 @@
 # VF Autosave Render + Output Variables
 
-Automates file naming with dynamic variables in the standard output path and compositing file output nodes, and  enables more advanced production workflows with various kinds of batch rendering, automatic compiling of image sequences into videos using FFmpeg, and saving a numbered, dated, or custom formatted image after every render. Render time estimation and logging is also tracked.
+Automates file naming with dynamic variables in the standard output path and compositing file output nodes, and	enables more advanced production workflows with various kinds of batch rendering, automatic compiling of image sequences into videos using FFmpeg, and saving a numbered, dated, or custom formatted image after every render. Render time estimation and logging is also tracked.
 
 ![screenshot of the variable popup window in the Blender compositing tab](images/banner.jpg)
 
@@ -70,7 +70,7 @@ Plugin settings are found in the Blender Preferences panel add-on tab. These set
 - `Autosave Videos` if FFmpeg is installed, enables the Render tab > Output panel > Autosave Videos interface, which has options for compiling completed image sequences to ProRes, MP4, and custom FFmpeg command line strings (see the [Autosave Videos](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-videos) section for more details)
 	- Installation location is autodetected, but can be set to a custom location if needed
 
-- `Autosave Images` saves an image every time rendering is completed or canceled (saving current progress), using the custom settings in the Render tab > Output panel  (see the [Autosave Images](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-images) section for more details)
+- `Autosave Images` saves an image every time rendering is completed or canceled (saving current progress), using the custom settings in the Render tab > Output panel	(see the [Autosave Images](https://github.com/jeinselen/VF-BlenderAutosaveRender#autosave-images) section for more details)
 	- `Global Overrides` allows for overriding the autosaved file `Location`, `Name`, and `Format`, ignoring per-project settings in the Render tab > Output panel > Autosave Images section
 	- The global override settings are the same as the Render tab settings (documented below), and any settings that are overridden, though still editable, will be greyed out in the Autosave Images panel to indicate they're being globally replaced
 	- Be warned that updating or disabling/re-enabling the plugin will erase global override settings, including resetting the serial number variable back to 0 (like all plugins, non-project preferences like these global settings are erased when a plugin is disabled or replaced)
@@ -124,54 +124,54 @@ The available variables are sorted into four groups: Project (values derived fro
 - `{material}` = active material of active object
 	- If the selected object doesn't contain a selected material, this will return "None"
 - `{node}` = the active node in the active material of the active object
-  - If an object > material > node selection is not found, this will return "None"
-  - The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is known to be reliable (such as with the image folder batch rendering function)
+	- If an object > material > node selection is not found, this will return "None"
+	- The `{material}` and `{node}` variable are more prone to failure because they require both a selected object and an active material slot, and should only be used in scenarios where the active selection is known to be reliable (such as with the image folder batch rendering function)
 2. **Image variables**
 - `{display}` = display device format
 - `{colorspace}` = the output colour space, also known as the interchange format
-  - This is called "View Transform" in Blender; `{viewtransform}` can be used interchangeably
+	- This is called "View Transform" in Blender; `{viewtransform}` can be used interchangeably
 - `{look}` = the additional contrast transform applied
 - `{exposure}` = current exposure value
 - `{gamma}` = current gamma value
 - `{curves}` = returns the status of the color management curves, either "Curves" or "None"
-  - All of the above color management controls set in the `Render` panel can be overridden in the `Output` panel: the variables should correctly reflect either approach, but will not reflect per-input overrides in `Compositing` tab `File Output` nodes
+	- All of the above color management controls set in the `Render` panel can be overridden in the `Output` panel: the variables should correctly reflect either approach, but will not reflect per-input overrides in `Compositing` tab `File Output` nodes
 - `{compositing}` = returns the status of the compositing node tree, either "Compositing" or "None"
 3. **Rendering variables**
-  - `{engine}` = name of the current rendering engine (uses the internal Blender identifier)
+	- `{engine}` = name of the current rendering engine (uses the internal Blender identifier)
 	- Replaces `{renderengine}` for better readability, but the old variable still works as expected
-  - `{device}` = CPU or GPU device
-    - Workbench and Eevee always use the GPU
-    - Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
-    - Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
-    - LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
-  - `{samples}` = number of samples
-    - Workbench will return the type of antialiasing enabled
-    - Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
-    - Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
-    - Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
-    - LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
-    - All outputs reflect the order displayed in the Blender interface
-  - `{features}` = enabled features or ray recursions
-    - Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
-    - Eevee will list abbreviations for any active effects (ambient occlusion, bloom, screen space reflections, and motion blur with the number of steps) or "None" if all of them are disabled
-    - Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
-    - Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
-    - LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
-  - `{duration}` = time spent rendering in seconds
+	- `{device}` = CPU or GPU device
+		- Workbench and Eevee always use the GPU
+		- Cycles can be set to either CPU or GPU, but multiple enabled devices will not be listed
+		- Radeon ProRender can use both CPU and GPU simultaneously, and in the case of multiple GPUs, additional active devices will be added as "+GPU"
+		- LuxCore can be set to either CPU or GPU, but multiple enabled devices will not be listed
+	- `{samples}` = number of samples
+		- Workbench will return the type of antialiasing enabled
+		- Eevee will return the total number of samples, subsurface scattering samples, and volumetric samples
+		- Cycles will return the adaptive sampling threshold, maximum samples, and minimum samples
+		- Radeon ProRender will return the minimum samples, maximum samples, and the adaptive sampling threshold
+		- LuxCore will return the sample settings for adaptive strength, warmup samples, and test step samples (Path) or eye depth and light depth (Bidir)
+		- All outputs reflect the order displayed in the Blender interface
+	- `{features}` = enabled features or ray recursions
+		- Workbench will return the type of lighting used; STUDIO, MATCAP, or FLAT
+		- Eevee will list abbreviations for any active effects (ambient occlusion, bloom, screen space reflections, and motion blur with the number of steps) or "None" if all of them are disabled
+		- Cycles will return the maximum values set for total bounces, diffuse, glossy, transmission, volume, and transparent
+		- Radeon ProRender will return the maximum values set for total ray depth, diffuse, glossy, refraction, glossy refraction, and shadow
+		- LuxCore will return the halt settings, if enabled, for seconds, samples, and/or noise threshold with warmup samples and test step samples
+	- `{duration}` = time spent rendering in seconds
 	- Replaces `{rendertime}` for better clarity and readability, but the old variable still works as expected
-  - `{rtime}` = time spent rendering in HH-MM-SS format (hours will not roll over into days)
+	- `{rtime}` = time spent rendering in HH-MM-SS format (hours will not roll over into days)
 	- This is a combined shortcut for the individual date variables below
-  - `{rH}` = just the hours component from `{rtime}`
-  - `{rM}` = just the minutes component from `{rtime}`
-  - `{rS}` = just the seconds component from `{rtime}`
-    - Render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
-      - Post-render plugin features that support render time variables include:
-        - `Autosave Videos` and `Autosave Images` features in the Render tab > Output panel
-        - Render complete notifications
-      - Pre-render plugin features that do *<u>not</u>* support render time variables include:
-        - `Output Path` in the Render tab > Output panel
-        - `Image Output` nodes in the Compositing workspace
-    - Rendering duration is calculated within the script at render start and end, and may not _exactly_ match the render metadata (which is unavailable in the Python API)
+	- `{rH}` = just the hours component from `{rtime}`
+	- `{rM}` = just the minutes component from `{rtime}`
+	- `{rS}` = just the seconds component from `{rtime}`
+		- Render time variables are only available _after_ rendering completes, and cannot be used in general file outputs where the variables must be set _prior_ to rendering
+			- Post-render plugin features that support render time variables include:
+				- `Autosave Videos` and `Autosave Images` features in the Render tab > Output panel
+				- Render complete notifications
+			- Pre-render plugin features that do *<u>not</u>* support render time variables include:
+				- `Output Path` in the Render tab > Output panel
+				- `Image Output` nodes in the Compositing workspace
+		- Rendering duration is calculated within the script at render start and end, and may not _exactly_ match the render metadata (which is unavailable in the Python API)
 4. **System variables**
 - `{host}` = name of the computer or host being used for rendering
 - `{processor}` = processor type (example: "x86_64")
@@ -183,21 +183,21 @@ The available variables are sorted into four groups: Project (values derived fro
 	- Replaces `{version}` for improved clarity, but the old variable still works as expected
 5. **Identifier variables**
 - `{date}` = current date in YYYY-MM-DD format
-  - This is a combined shortcut for the individual date variables below
+	- This is a combined shortcut for the individual date variables below
 - `{y}` or `{year}` = current year in YYYY format
 - `{m}` or `{month}` = current month in MM format
 - `{d}` or `{day}` = current day in DD format
 - `{time}` = current time in HH-MM-SS 24-hour format
-  - This is a combined shortcut for the individual time variables below
-  - Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables (otherwise month and minute would conflict with each other)
+	- This is a combined shortcut for the individual time variables below
+	- Note the uppercase capitalisation for the shorthand time variables, distinguishing them from the shorthand date variables (otherwise month and minute would conflict with each other)
 - `{H}` or `{hour}` = current hour in HH 24-hour format
 - `{M}` or `{minute}` = current minute in MM format
 - `{S}` or `{second}` = current second in SS format
 - `{serial}` = automatically incremented serial number padded to 4 digits
-  - While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving is separate so that test renders can use their own serial number tracking
-  - The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
-  - The serial number will still increment even if the render output is not triggered during the rendering of a single image
-  - Files may be overwritten if this counter is manually reset; both a feature and a danger
+	- While this variable can be used in the autosave path and custom string, the output path, and in compositing tab file output nodes, the serial number for autosaving is separate so that test renders can use their own serial number tracking
+	- The `Serial Number` input fields are enabled only when the `{serial}` variable appears in the associated path or file name, and will automatically increment every time a render is saved
+	- The serial number will still increment even if the render output is not triggered during the rendering of a single image
+	- Files may be overwritten if this counter is manually reset; both a feature and a danger
 - `{frame}` = current frame number (padded to four digits)
 	- This doesn't work well for the Output Path and Image Output nodes because those strings must be processed by the plugin before rendering starts, not during; the frame number would always be the same
 	- Instead, use pound signs "####" for the Output Path and Image Output nodes
@@ -317,20 +317,27 @@ Only the final frame will be autosaved when rendering animation sequences, preve
 The `Batch Render` interface appears in the `VF Tools` tab of any 3D view, and allows the user to select from a number of batch options.
 
 - `Batch Type` sets the batch rendering mode
-	- `Cameras` renders each selected camera or each camera in the selected collection
-	- `Collections` renders each child collection within the selected collection
+
+	- `Cameras` renders the same scene for each selected camera or each camera in the selected collection
+	- `Collections` renders the scene for each child collection within the selected collection
 		- Little bit of trivia; this is how the BCON 2023 [Production Pipelines for Interactive Platforms](https://www.youtube.com/watch?v=Uu35wS8iDJ8) presentation slides were rendered
 	- `Items` renders each selected item, or each item in the selected collection
 	- `Images` renders each image in a source folder, replacing the source of a single target Image Texture node each time
 		- `Source Folder` sets the input folder of images that should be used for batch rendering
 		- `Assign Image Node` will assign the currently selected Object > Material > Image Texture node as the target (this must be assigned before batch rendering will be enabled in this mode)
+
 	- If no valid selection, collection, or texture source is found, a warning will appear in the UI to indicate the issue
+
 - `Batch Index` this can be manually entered for testing of procedural systems, but during batch rendering will be set to the index of the current element in the batch list
+
 - `Batch Range`
+
 	- `Image` will render the current frame once for each element in the batch list
 	- `Animation` will render the entire scene frame range for each element in the batch list
 
-Batch render relies on the Python API to trigger each render, so Blender will freeze during processing with no updates visible (except for files being saved). This is a limitation of the Blender Python API and its heavy reliance on static context to operate.
+Batch render relies on the Python API to trigger each render, so Blender will freeze during processing with no updates visible (except for files being saved). This is a limitation of the Blender Python API and the heavy reliance on static context to operate.
+
+Each image or sequence rendered in a batch list is treated as a separate render trigger, so variables like `{time}` and `{serial}` will be updated for each item in the list. The `{batch}` variable will also return the Batch Index during rendering, but more importantly the `{camera}` `{collection}` `{item}` and `{node}` variables for their respective batch types all reflect the element that's being rendered.
 
 
 
@@ -362,6 +369,7 @@ Notifications all support the full list of render variables, so feel free to cus
 
 - `Minimum Render Time` sets the threshold before notifications will be sent when a render is completed, measured in seconds (the default setting of 300 seconds = 5 minutes)
 	- This is intended to prevent constant notifications of super short renders, but setting it to 0 will result in all notifications being sent
+
 - `Email Notification` sends an email to any number of addresses on render completion, including texting mobile phones using email-to-text (depending on carrier support)
 	- Blender does not encrypt plugin settings when saved to disk; the login password is stored as plain text so use this feature entirely at your own very, very terrible risk*
 	- Even worse, the Python setup being used here doesn't work with accounts that use OAuth, two-factor authentication, or other security methods, so it really is about the most insecure setup possible
@@ -370,9 +378,11 @@ Notifications all support the full list of render variables, so feel free to cus
 	- [Pushover](https://pushover.net) is a paid third-party service that supports browser notifications, iOS, and Android mobile devices (affordable one-time purchase for individuals, or a subscription for teams)
 	- Once an account is created, you will need to set up a specific application key so Blender can access the API. It's super simple, and gives you up to 10k push notifications a month per app code without any additional costs.
 	- Blender does not encrypt plugin settings when saved to disk; the user key and app token are stored as plain text so use this feature *entirely at your own risk*
+
 - `Siri Announcement` is only available in MacOS; this announces render completion using the local Siri settings
 	- `Siri Message` customises the spoken message, all dynamic variables are supported
 	- The command blocks further processing till the message is completed, so long strings aren't ideal (you have to wait till they finish to continue using Blender)
+
 
 ### Details Regarding Email Notifications
 
