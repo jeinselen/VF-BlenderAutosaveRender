@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 2),
+	"version": (2, 8, 3),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -200,12 +200,15 @@ def autosave_render_end(scene):
 	if bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_processing and bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_exists and bpy.context.scene.render.image_settings.file_format in FFMPEG_FORMATS and bpy.context.scene.autosave_render_settings.autosave_video_sequence:
 		# Create initial command base
 		ffmpeg_location = bpy.context.preferences.addons['VF_autosaveRender'].preferences.ffmpeg_location
-		# Create absolute path (strip trailing spaces to clean up output files)
+		# Create absolute path and strip trailing spaces
 		absolute_path = bpy.path.abspath(scene.render.filepath).rstrip()
+		# Replace frame number placeholder with asterisk or add trailing asterisk
+		if "#" in absolute_path:
+			absolute_path = sub(r'#+(?!.*#)', "*", absolute_path)
+		else:
+			absolute_path += "*"
 		# Create input image glob pattern
-		glob_pattern = '-pattern_type glob -i "' + absolute_path + '*' + scene.render.file_extension + '"'
-		# Force overwrite and include quotations
-		absolute_path = '-y "' + absolute_path + '"'
+		glob_pattern = '-pattern_type glob -i "' + absolute_path + scene.render.file_extension + '"'
 		# Create floating point FPS value
 		fps_float = '-r ' + str(scene.render.fps / scene.render.fps_base)
 		
@@ -213,8 +216,6 @@ def autosave_render_end(scene):
 		if bpy.context.scene.autosave_render_settings.autosave_video_prores:
 			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
-			# Set up output path
-			output_path = absolute_path
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_prores_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_prores_location
@@ -247,11 +248,16 @@ def autosave_render_end(scene):
 			ffmpeg_command += ' ' + output_path + '.mov'
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('FFmpeg ProRes command: ' + ffmpeg_command)
+			
+			# Print command to the terminal
+			print('FFmpeg ProRes command:')
+			print(ffmpeg_command)
+			print('')
 			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
+				print('')
 			except Exception as exc:
 				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg ProRes command")
 		
@@ -259,8 +265,6 @@ def autosave_render_end(scene):
 		if bpy.context.scene.autosave_render_settings.autosave_video_mp4:
 			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
-			# Set up output path
-			output_path = absolute_path
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_mp4_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_mp4_location
@@ -293,11 +297,16 @@ def autosave_render_end(scene):
 			ffmpeg_command += ' ' + output_path + '.mp4'
 			# Remove any accidental double or more spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('FFmpeg MP4 command: ' + ffmpeg_command)
+			
+			# Print command to the terminal
+			print('FFmpeg MP4 command:')
+			print(ffmpeg_command)
+			print('')
 			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
+				print('')
 			except Exception as exc:
 				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg MP4 command")
 		
@@ -305,8 +314,6 @@ def autosave_render_end(scene):
 		if bpy.context.scene.autosave_render_settings.autosave_video_custom:
 			# Set FFmpeg processing to true so the Image View window can display status
 			bpy.context.scene.autosave_render_settings.autosave_video_sequence_processing = True
-			# Set up output path
-			output_path = absolute_path
 			if len(bpy.context.scene.autosave_render_settings.autosave_video_custom_location) > 1:
 				# Replace with custom string
 				output_path = bpy.context.scene.autosave_render_settings.autosave_video_custom_location
@@ -331,11 +338,16 @@ def autosave_render_end(scene):
 			ffmpeg_command = ffmpeg_command.replace("{output}", output_path)
 			# Remove any accidental double spaces
 			ffmpeg_command = sub(r'\s{2,}', " ", ffmpeg_command)
-			print('FFmpeg custom command: ' + ffmpeg_command)
+			
+			# Print command to the terminal
+			print('FFmpeg custom command:')
+			print(ffmpeg_command)
+			print('')
 			
 			# Run FFmpeg command
 			try:
 				subprocess.call(ffmpeg_command, shell=True)
+				print('')
 			except Exception as exc:
 				print(str(exc) + " | Error in VF Autosave Render: failed to process FFmpeg custom command")
 	
@@ -496,7 +508,7 @@ def autosave_render_end(scene):
 			return {'CANCELLED'}
 		
 		# Please note that multilayer EXR files are currently unsupported in the Python API - https://developer.blender.org/T71087
-		image.save_render(filepath, scene=None) # Might consider using bpy.context.scene if different compression settings are desired per-scene?
+		image.save_render(filepath, scene=None) # Consider using bpy.context.scene if different compression settings are desired per-scene
 		
 		# Restore original user settings for render output
 		scene.render.image_settings.file_format = original_format
@@ -750,6 +762,7 @@ def replaceVariables(string, rendertime=-1.0, serial=-1):
 	if serial >= 0: # Only enabled if a value is supplied
 		string = string.replace("{serial}", format(serial, '04'))
 	string = string.replace("{frame}", format(scene.frame_current, '04'))
+	# Consider adding hash-mark support for inserting frames: sub(r'#+(?!.*#)', "", absolute_path)
 	# Batch variables
 	string = string.replace("{index}", "{batch}") # Alternative variable (backwards compatibility may be removed at a later date)
 	string = string.replace("{batch}", format(scene.autosave_render_settings.batch_index, '04'))
@@ -1074,7 +1087,7 @@ class AutosaveRenderPreferences(bpy.types.AddonPreferences):
 		# Output variables
 		grid1.prop(self, "render_output_variables")
 		ops = grid1.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
+		ops.postrender = True
 		
 		# Autosave Videos - FFmpeg Sequencing
 		grid1.prop(self, "ffmpeg_processing")
@@ -1517,7 +1530,7 @@ class RENDER_PT_autosave_video(bpy.types.Panel):
 		
 		# Variable list popup button
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
+		ops.postrender = True
 		
 		# Display serial number if used in any enabled FFmpeg output paths
 		paths = ''
@@ -1604,7 +1617,7 @@ class RENDER_PT_autosave_render(bpy.types.Panel):
 		
 		# Variable list popup button
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-		ops.rendertime = True
+		ops.postrender = True
 		
 		# Local project serial number
 		# Global serial number is listed inline with the path or file override, if used
@@ -1671,7 +1684,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 	bl_idname = "vf.autosave_render_variable_popup"
 	bl_options = {'REGISTER', 'INTERNAL'}
 	
-	rendertime: bpy.props.BoolProperty()
+	postrender: bpy.props.BoolProperty()
 	
 	@classmethod
 	def poll(cls, context):
@@ -1694,7 +1707,7 @@ class AutosaveRenderVariablePopup(bpy.types.Operator):
 				col = grid.column()
 				col.label(text = x[1], icon = x[2])
 			# Display list elements
-			elif item not in ["{duration}", "{rtime}", "{rH},{rM},{rS}"] or self.rendertime:
+			elif item not in ["{duration}", "{rtime}", "{rH},{rM},{rS}", "{frame}"] or self.postrender:
 				if ',' in item:
 					subrow = col.row(align = True)
 					for subitem in item.split(','):
@@ -1711,7 +1724,7 @@ def RENDER_PT_output_path_variable_list(self, context):
 		# UI layout for Scene Output
 		layout = self.layout
 		ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF") # LINENUMBERS_OFF, THREE_DOTS, SHORTDISPLAY, ALIGN_JUSTIFY
-		ops.rendertime = False
+		ops.postrender = False
 		layout.use_property_decorate = False
 		layout.use_property_split = True
 		input = layout.row()
@@ -1736,7 +1749,7 @@ def NODE_PT_output_path_variable_list(self, context):
 			layout.use_property_decorate = False
 			layout.use_property_split = True
 			ops = layout.operator(AutosaveRenderVariablePopup.bl_idname, text = "Variable List", icon = "LINENUMBERS_OFF")
-			ops.rendertime = False
+			ops.postrender = False
 			input = layout.row()
 			if not '{serial}' in paths:
 				input.active = False
