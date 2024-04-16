@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 4),
+	"version": (2, 8, 5),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -1420,7 +1420,7 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 	autosave_video_custom_command: bpy.props.StringProperty(
 		name="Custom FFmpeg Command",
 		description="Custom FFmpeg command line string; {input} {fps} {output} variables must be included, but the command path is automatically prepended",
-		default='{fps} {input} -vf scale=-2:1080 -c:v libx264 -preset medium -crf 10 -pix_fmt yuv420p -movflags +rtphint -movflags +faststart {output}_1080p.mp4',
+		default='{fps} {input} -vf scale=-2:1080 -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -movflags +rtphint -movflags +faststart {output}_1080p.mp4',
 				#{fps} {input} -c:v hevc_videotoolbox -pix_fmt bgra -b:v 1M -alpha_quality 1 -allow_sw 1 -vtag hvc1 {output}_alpha.mov
 				#{fps} {input} -c:v hevc_videotoolbox -require_sw 1 -allow_sw 1 -alpha_quality 1.0 -vtag hvc1 {output}_alpha.mov
 				#{fps} {input} -pix_fmt yuva420p {output}_alpha.webm
@@ -1494,6 +1494,20 @@ class AutosaveRenderSettings(bpy.types.PropertyGroup):
 		description="Dynamically populated during batch rendering with the current camera, collection, item, or image index integer starting with 0",
 		default=0,
 		step=1)
+	batch_factor: bpy.props.FloatProperty(
+		name="Batch Factor (set during rendering)",
+		description="Dynamically populated during batch rendering with the current position (0-1) within the batch",
+		default=0.25,
+		min=0,
+		max=1,
+		subtype="FACTOR")
+	batch_random: bpy.props.FloatProperty(
+		name="Batch Random (set during rendering)",
+		description="Dynamically populated during batch rendering with a random value (0-1) from the current factor hash",
+		default=0.75,
+		min=0,
+		max=1,
+		subtype="FACTOR")
 
 
 
@@ -1821,8 +1835,10 @@ class VF_autosave_render_batch(bpy.types.Operator):
 	def execute(self, context):
 		context.scene.autosave_render_settings.batch_active = True
 		
-		# Preserve manually entered batch index
+		# Preserve manually entered batch index and values
 		original_batch_index = context.scene.autosave_render_settings.batch_index
+		original_batch_factor = context.scene.autosave_render_settings.batch_factor
+		original_batch_random = context.scene.autosave_render_settings.batch_random
 		
 		# Batch render cameras
 		if context.scene.autosave_render_settings.batch_type == 'cams':
@@ -1846,8 +1862,15 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# Reset batch index value
 			context.scene.autosave_render_settings.batch_index = 0
 			
+			# Set length of batch collection
+			batch_length = len(source_cameras) - 1
+			
 			# Render each camera in the list
 			for cam in source_cameras:
+				# Set batch values
+				context.scene.autosave_render_settings.batch_factor = context.scene.autosave_render_settings.batch_index / batch_length
+				context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
+				
 				# Set rendering camera to current camera
 				bpy.context.scene.camera = cam
 				
@@ -1899,8 +1922,15 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# Reset batch index value
 			context.scene.autosave_render_settings.batch_index = 0
 			
+			# Set length of batch collection
+			batch_length = len(source_collections) - 1
+			
 			# Render each collection in the list
 			for col in source_collections:
+				# Set batch values
+				context.scene.autosave_render_settings.batch_factor = context.scene.autosave_render_settings.batch_index / batch_length
+				context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
+				
 				# Set current collection name
 				context.scene.autosave_render_settings.batch_collection_name = col.name
 				
@@ -1943,11 +1973,11 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# If non-camera items are selected
 			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type != 'CAMERA']) > 0:
 				source_items = [obj for obj in context.selected_objects if obj.type != 'CAMERA']
-				
+			
 			# If no items are selected, check for an active collection with non-camera items
 			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']) > 0:
 				source_items = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type != 'CAMERA']
-				
+			
 			# If still no items are available, return cancelled
 			else:
 				context.scene.autosave_render_settings.batch_active = False
@@ -1964,8 +1994,15 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# Reset batch index value
 			context.scene.autosave_render_settings.batch_index = 0
 			
+			# Set length of batch collection
+			batch_length = len(source_items) - 1
+			
 			# Render each item in the list
 			for obj in source_items:
+				# Set batch values
+				context.scene.autosave_render_settings.batch_factor = context.scene.autosave_render_settings.batch_index / batch_length
+				context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
+				
 				# Set current object to selected, active, and renderable
 				obj.select_set(True)
 				context.view_layer.objects.active = obj
@@ -2035,8 +2072,15 @@ class VF_autosave_render_batch(bpy.types.Operator):
 			# Reset batch index value
 			context.scene.autosave_render_settings.batch_index = 0
 			
+			# Set length of batch collection
+			batch_length = len(source_images) - 1
+			
 			# Batch render images (assumes we've already cancelled if there's an error with the folder)
 			for img_file in source_images:
+				# Set batch values
+				context.scene.autosave_render_settings.batch_factor = context.scene.autosave_render_settings.batch_index / batch_length
+				context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
+				
 				# Import as new image if it doesn't already exist
 				image = bpy.data.images.load(os.path.join(source_folder, img_file), check_existing=True)
 				
@@ -2238,6 +2282,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					feedback_text='Invalid location'
 					feedback_icon='ERROR'
 					batch_error = True
+				
 				feedback = input1.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 				
@@ -2248,6 +2293,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				else:
 					target_text = 'Assign Image Node'
 					target_icon = 'ERROR'
+				
 				input2.operator(VF_autosave_render_batch_assign_image_target.bl_idname, text=target_text)
 				
 				# List the assigned material node if it exists
@@ -2258,15 +2304,19 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 					feedback_text = 'Select object > material > image node'
 					feedback_icon = 'ERROR'
 					batch_error = True
+				
 				feedback = input2.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
 			
+			# Not-really-read-only batch index and values
+			field = layout.column(align=True)
+			field.label(text="Batch values (set during rendering)")
+			field.prop(context.scene.autosave_render_settings, 'batch_index', text='Index', icon='MODIFIER') # PREFERENCES MODIFIER
+			field.prop(context.scene.autosave_render_settings, 'batch_factor', text='Factor', icon='MODIFIER') # PREFERENCES MODIFIER
+			field.prop(context.scene.autosave_render_settings, 'batch_random', text='Random', icon='MODIFIER') # PREFERENCES MODIFIER
+			
 			# Final settings and start render
 			input3 = layout.column(align=True)
-			
-			# Read-only batch index field
-			field = input3.row(align=True)
-			field.prop(context.scene.autosave_render_settings, 'batch_index', icon='MODIFIER') # PREFERENCES MODIFIER
 			
 			# Batch range setting (still or sequence)
 			buttons = input3.row(align=True)
