@@ -1,7 +1,7 @@
 bl_info = {
 	"name": "VF Autosave Render + Output Variables",
 	"author": "John Einselen - Vectorform LLC, based on work by tstscr(florianfelix)",
-	"version": (2, 8, 5),
+	"version": (2, 8, 6),
 	"blender": (3, 2, 0),
 	"location": "Scene Output Properties > Output Panel > Autosave Render",
 	"description": "Automatically saves rendered images with custom naming",
@@ -1842,17 +1842,19 @@ class VF_autosave_render_batch(bpy.types.Operator):
 		
 		# Batch render cameras
 		if context.scene.autosave_render_settings.batch_type == 'cams':
-			# Preserve original active camera
-			original_camera = bpy.context.scene.camera
+			# Preserve original active camera and render resolution
+			original_camera = context.scene.camera
+			original_resolution_x = context.scene.render.resolution_x
+			original_resolution_y = context.scene.render.resolution_y
 			
 			# If cameras are selected
 			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type == 'CAMERA']) > 0:
 				source_cameras = [obj for obj in context.selected_objects if obj.type == 'CAMERA']
-				
+			
 			# If no cameras are selected, check for an active collection with cameras
 			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']) > 0:
 				source_cameras = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']
-				
+			
 			# If still no cameras are available, return cancelled
 			else:
 				context.scene.autosave_render_settings.batch_active = False
@@ -1872,7 +1874,19 @@ class VF_autosave_render_batch(bpy.types.Operator):
 				context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
 				
 				# Set rendering camera to current camera
-				bpy.context.scene.camera = cam
+				context.scene.camera = cam
+				
+				# Set scene resolution from camera name if appended "#x#" pattern is found
+				resolution_match = search(r'(\d+)x(\d+)$', context.scene.camera.name)
+				if resolution_match != None:
+					context.scene.render.resolution_x = int(resolution_match.group(1))
+					context.scene.render.resolution_y = int(resolution_match.group(2))
+					original_camera_name = context.scene.camera.name
+					context.scene.camera.name = original_camera_name.replace(resolution_match.group(0), "")
+				# If no resolution is supplied, reset to original settings (allows mixing of custom and default resolutions in a single batch render)
+				else:
+					context.scene.render.resolution_x = original_resolution_x
+					context.scene.render.resolution_y = original_resolution_y
 				
 				# Render
 				if context.scene.autosave_render_settings.batch_range == 'img':
@@ -1882,11 +1896,17 @@ class VF_autosave_render_batch(bpy.types.Operator):
 					# Sequence
 					bpy.ops.render.render(animation=True, use_viewport=True)
 				
+				# Restore camera name if it was changed to remove the resolution
+				if resolution_match != None:
+					context.scene.camera.name = original_camera_name
+				
 				# Increment index value
 				context.scene.autosave_render_settings.batch_index += 1
 				
-			# Restore original active camera
-			bpy.context.scene.camera = original_camera
+			# Restore original active camera and render resolution
+			context.scene.camera = original_camera
+			context.scene.render.resolution_x = original_resolution_x
+			context.scene.render.resolution_y = original_resolution_y
 		
 		# Batch render collections
 		if context.scene.autosave_render_settings.batch_type == 'cols':
@@ -2133,6 +2153,73 @@ class VF_autosave_render_batch_assign_image_target(bpy.types.Operator):
 		context.scene.autosave_render_settings.batch_images_node = context.view_layer.objects.active.active_material.node_tree.nodes.active.name
 		return {'FINISHED'}
 
+# Manually set camera and/or render resolution
+class VF_autosave_render_batch_camera_update(bpy.types.Operator):
+	bl_idname = 'render.vf_autosave_render_batch_camera_update'
+	bl_label = 'Update batch rendering camera'
+	bl_description = "Update batch rendering camera"
+	bl_space_type = "VIEW_3D"
+	
+	list_offset: bpy.props.IntProperty() = 0
+	
+	@classmethod
+	def poll(cls, context):
+		return True
+	
+	def execute(self, context):
+		# Get current camera
+		target_camera = context.scene.camera
+		
+		# If offset, get previous or next camera from selection or collection
+		if self.list_offset != 0:
+			# If cameras are selected
+			if len(context.selected_objects) > 0 and len([obj for obj in context.selected_objects if obj.type == 'CAMERA']) > 0:
+				source_cameras = [obj for obj in context.selected_objects if obj.type == 'CAMERA']
+			
+			# If no cameras are selected, check for an active collection with cameras
+			elif context.view_layer.active_layer_collection and len(context.view_layer.active_layer_collection.collection.all_objects) > 0 and len([obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']) > 0:
+				source_cameras = [obj for obj in context.view_layer.active_layer_collection.collection.all_objects if obj.type == 'CAMERA']
+			
+			# If still no cameras are available, return cancelled
+			else:
+				context.scene.autosave_render_settings.batch_active = False
+				print('VF Autosave Batch Render: Cameras not found.')
+				return {'CANCELLED'}
+			
+			batch_length = len(source_cameras) - 1
+			
+			# If active camera is in the current group, offset from that position
+			if target_camera in source_cameras:
+				index = source_cameras.index(target_camera) + self.list_offset
+				if index < 0:
+					index += batch_length + 1
+				elif index > batch_length:
+					index -= batch_length + 1
+				
+				context.scene.autosave_render_settings.batch_index = index
+				target_camera = source_cameras[index]
+			
+			# Otherwise start at zero
+			else:
+				context.scene.autosave_render_settings.batch_index = 0
+				target_camera = source_cameras[0]
+			
+			# Set batch values
+			context.scene.autosave_render_settings.batch_factor = context.scene.autosave_render_settings.batch_index / batch_length
+			context.scene.autosave_render_settings.batch_random = hash(context.scene.autosave_render_settings.batch_factor * 0.9998 + 0.0001) / 1000000 % 1
+		
+			# Set rendering camera to current camera and make the item active for editing
+			context.scene.camera = target_camera
+			context.view_layer.objects.active = target_camera
+		
+		# Set scene resolution from camera name if appended "#x#" pattern is found
+		resolution_match = search(r'(\d+)x(\d+)$', context.scene.camera.name)
+		if resolution_match != None:
+			context.scene.render.resolution_x = int(resolution_match.group(1))
+			context.scene.render.resolution_y = int(resolution_match.group(2))
+		
+		return {'FINISHED'}
+
 
 
 ###########################################################################
@@ -2206,10 +2293,28 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 				else:
 					feedback_text='Invalid selection'
 					feedback_icon='ERROR'
-					
+				
 				# Display feedback
 				feedback = input0.box()
 				feedback.label(text=feedback_text, icon=feedback_icon)
+				
+				# Display previous / update / next camera buttons
+				if feedback_icon != "ERROR":
+					buttons = input1.row(align=True)
+					
+					# Switch to previous camera in list
+					if batch_count > 1:
+						op0 = buttons.operator(VF_autosave_render_batch_camera_update.bl_idname, text = "Previous", icon = "TRIA_LEFT") # 
+						op0.list_offset = -1
+					
+					# Update current camera
+					op1 = buttons.operator(VF_autosave_render_batch_camera_update.bl_idname, text = "Update", icon = "FILE_REFRESH") # 
+					op1.list_offset = 0
+					
+					# Switch to next camera in list
+					if batch_count > 1:
+						op2 = buttons.operator(VF_autosave_render_batch_camera_update.bl_idname, text = "Next", icon = "TRIA_RIGHT") # 
+						op2.list_offset = 1
 			
 			# Settings for Collections
 			if context.scene.autosave_render_settings.batch_type == 'cols':
@@ -2349,7 +2454,7 @@ class VFTOOLS_PT_autosave_batch_setup(bpy.types.Panel):
 # •Registration function
 # •Unregistration function
 
-classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderCopyToClipboard, VF_autosave_render_batch_assign_image_target, VF_autosave_render_batch, VFTOOLS_PT_autosave_batch_setup)
+classes = (AutosaveRenderPreferences, AutosaveRenderSettings, RENDER_PT_autosave_video, RENDER_PT_autosave_render, AutosaveRenderVariablePopup, AutosaveRenderCopyToClipboard, VF_autosave_render_batch_assign_image_target, VF_autosave_render_batch, VF_autosave_render_batch_camera_update, VFTOOLS_PT_autosave_batch_setup)
 
 def register():
 	for cls in classes:
