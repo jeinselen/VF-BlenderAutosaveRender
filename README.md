@@ -1,6 +1,8 @@
 # VF Autosave Render + Output Variables
 
-Automates file naming with dynamic variables in the standard output path and compositing file output nodes, and	enables more advanced production workflows with various kinds of batch rendering, automatic compiling of image sequences into videos using FFmpeg, and saving a numbered, dated, or custom formatted image after every render. Render time estimation and logging is also tracked.
+This add-on was designed for Blender version 2.8-4.1 (though not all previous versions may be fully supported). For Blender 4.2 and onwards, [please see the new Render Kit extension](https://github.com/jeinselen/Blender-RenderKit).
+
+Automates file naming with dynamic variables in the standard output path and compositing file output nodes, and enables more advanced production workflows with various kinds of batch rendering, automatic compiling of image sequences into videos using FFmpeg, and saving a numbered, dated, or custom formatted image after every render. Render time estimation and logging is also tracked.
 
 ![screenshot of the variable popup window in the Blender compositing tab](images/banner.jpg)
 
