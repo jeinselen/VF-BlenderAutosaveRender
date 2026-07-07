@@ -128,4 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Claude Code settings
+.claude/
+
 files
